@@ -1,0 +1,35 @@
+package com.parking.entity;
+
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.math.BigDecimal;
+import java.time.LocalTime;
+
+@Entity
+@Table(name = "BookingQuotas")
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class BookingQuota {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "QuotaID")
+    private Integer quotaId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "VehicleTypeID", nullable = false)
+    private VehicleType vehicleType;
+
+    @Column(name = "StartTime", nullable = false)
+    private LocalTime startTime;
+
+    @Column(name = "EndTime", nullable = false)
+    private LocalTime endTime;
+
+    @Column(name = "QuotaPercent", nullable = false)
+    private BigDecimal quotaPercent; // % of C, theo loai xe, khong theo tang
+}
