@@ -27,25 +27,28 @@ public class SessionService {
     private final ReservationRepository reservationRepository;
     private final PricingPolicyRepository pricingPolicyRepository;
     private final PaymentRepository paymentRepository;
+    private final AuditLogRepository auditLogRepository;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
      * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc vao.
      */
     @Transactional
-    public ParkingSession checkIn(CheckInRequest request) {
+    public CheckInResponse checkIn(CheckInRequest request) {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
         Gate entryGate = gateRepository.findById(request.getEntryGateId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay cong vao"));
 
+        LocalDateTime now = LocalDateTime.now();
         Reservation reservation = null;
-        if (request.getReservationId() != null) {
-            reservation = reservationRepository.findById(request.getReservationId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking"));
-            if (!"Confirmed".equals(reservation.getStatus())) {
-                throw new BusinessRuleException("Booking khong o trang thai Confirmed");
-            }
+        
+        List<Reservation> activeReservations = reservationRepository
+                .findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
+                        request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now);
+
+        if (!activeReservations.isEmpty()) {
+            reservation = activeReservations.get(0);
             reservation.setStatus("CheckedIn");
             reservationRepository.save(reservation);
         } else {
@@ -53,7 +56,6 @@ public class SessionService {
                     vehicleType.getVehicleTypeId(), "Maintenance");
             long inside = sessionRepository.countByVehicleType_VehicleTypeIdAndStatusIn(
                     vehicleType.getVehicleTypeId(), OPEN_SESSION_STATUSES);
-            LocalDateTime now = LocalDateTime.now();
             long outstanding = reservationRepository
                     .countByVehicleType_VehicleTypeIdAndStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
                             vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now, now);
@@ -73,14 +75,31 @@ public class SessionService {
                 .licensePlateIn(request.getLicensePlate())
                 .entryImageUrl(request.getEntryImageUrl())
                 .vehicleType(vehicleType)
-                .entryTime(LocalDateTime.now())
+                .entryTime(now)
                 .entryGate(entryGate)
                 .suggestedSlot(suggestedSlot)
-                .suggestedSlotHoldExpiresAt(suggestedSlot == null ? null : LocalDateTime.now().plusMinutes(5))
+                .suggestedSlotHoldExpiresAt(suggestedSlot == null ? null : now.plusMinutes(5))
                 .status("Admitted")
                 .build();
 
-        return sessionRepository.save(session);
+        session = sessionRepository.save(session);
+
+        AuditLog log = AuditLog.builder()
+                .action("STAFF_CHECK_IN")
+                .entityName("ParkingSession")
+                .entityId(String.valueOf(session.getSessionId()))
+                .detail("Staff checked in vehicle: " + request.getLicensePlate() + (reservation != null ? " with booking" : " as walk-in"))
+                .createdAt(now)
+                .build();
+        auditLogRepository.save(log);
+
+        return CheckInResponse.builder()
+                .sessionId(session.getSessionId())
+                .licensePlateIn(session.getLicensePlateIn())
+                .entryTime(session.getEntryTime())
+                .suggestedSlotCode(suggestedSlot != null ? suggestedSlot.getSlotCode() : null)
+                .isReserved(reservation != null)
+                .build();
     }
 
     /**

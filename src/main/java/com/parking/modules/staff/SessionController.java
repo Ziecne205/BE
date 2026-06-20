@@ -18,7 +18,7 @@ public class SessionController {
     private final SessionService sessionService;
 
     @PostMapping("/check-in")
-    public ApiResponse<ParkingSession> checkIn(@Valid @RequestBody CheckInRequest request) {
+    public ApiResponse<CheckInResponse> checkIn(@Valid @RequestBody CheckInRequest request) {
         return ApiResponse.ok("Xe vao thanh cong", sessionService.checkIn(request));
     }
 
