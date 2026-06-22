@@ -5,7 +5,7 @@ spring:
   datasource:
     url: jdbc:sqlserver://localhost:1433;databaseName=ParkingDB;encrypt=true;trustServerCertificate=true
     username: sa
-    password: YOUR_PASSWORD_HERE
+    password: 12345
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   jpa:
     hibernate:
