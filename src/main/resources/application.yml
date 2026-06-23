@@ -5,11 +5,13 @@ spring:
   datasource:
     url: jdbc:sqlserver://localhost:1433;databaseName=ParkingDB;encrypt=true;trustServerCertificate=true
     username: sa
-    password: YOUR_PASSWORD_HERE
+    password: sa12345
     driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
   jpa:
     hibernate:
       ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
     show-sql: true
     properties:
       hibernate:
