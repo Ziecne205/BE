@@ -9,6 +9,7 @@ import com.parking.repository.PaymentRepository;
 import com.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -17,6 +18,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class SessionDriverService {
 
     private final ParkingSessionRepository sessionRepository;

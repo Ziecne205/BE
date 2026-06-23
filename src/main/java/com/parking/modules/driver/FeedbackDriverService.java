@@ -8,11 +8,13 @@ import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class FeedbackDriverService {
 
     private final FeedbackRepository feedbackRepository;
