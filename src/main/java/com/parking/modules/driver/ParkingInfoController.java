@@ -21,6 +21,6 @@ public class ParkingInfoController {
     @Operation(summary = "Get parking lot information", description = "Retrieves operating hours, active pricing policies, and current slot availability by vehicle type. Does not require authentication.")
     public ResponseEntity<ApiResponse<ParkingInfoResponse>> getParkingInfo() {
         ParkingInfoResponse info = parkingInfoService.getParkingInfo();
-        return ResponseEntity.ok(ApiResponse.success(info, "Successfully retrieved parking info"));
+        return ResponseEntity.ok(ApiResponse.ok("Successfully retrieved parking info", info));
     }
 }
