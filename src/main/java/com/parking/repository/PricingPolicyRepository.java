@@ -1,6 +1,7 @@
 package com.parking.repository;
 
 import com.parking.entity.PricingPolicy;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -10,4 +11,8 @@ public interface PricingPolicyRepository extends JpaRepository<PricingPolicy, In
     Optional<PricingPolicy> findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(Integer vehicleTypeId, String status);
     List<PricingPolicy> findByVehicleType_VehicleTypeIdOrderByEffectiveDateDesc(Integer vehicleTypeId);
     List<PricingPolicy> findByVehicleType_VehicleTypeIdAndStatus(Integer vehicleTypeId, String status);
+
+    @Override
+    @EntityGraph(attributePaths = {"vehicleType"})
+    List<PricingPolicy> findAll();
 }
