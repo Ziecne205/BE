@@ -21,6 +21,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@Transactional
 public class IncidentManagerService {
 
     private final IncidentReportRepository incidentRepository;
