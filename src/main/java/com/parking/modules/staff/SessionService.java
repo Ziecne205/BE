@@ -15,6 +15,7 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class SessionService {
 
     private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");
