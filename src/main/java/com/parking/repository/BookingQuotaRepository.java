@@ -4,4 +4,5 @@ import com.parking.entity.BookingQuota;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface BookingQuotaRepository extends JpaRepository<BookingQuota, Integer> {
+    java.util.List<BookingQuota> findByVehicleType_VehicleTypeId(Integer vehicleTypeId);
 }
