@@ -9,7 +9,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface ParkingSessionRepository extends JpaRepository<ParkingSession, Long> {
-    Optional<ParkingSession> findFirstByLicensePlateInAndStatusIn(String licensePlateIn, List<String> statuses);
+    @Query("SELECT p FROM ParkingSession p WHERE p.licensePlateIn = :licensePlateIn AND p.status IN :statuses")
+    Optional<ParkingSession> findFirstByLicensePlateInAndStatusIn(@org.springframework.data.repository.query.Param("licensePlateIn") String licensePlateIn, @org.springframework.data.repository.query.Param("statuses") List<String> statuses);
     List<ParkingSession> findByDriver_UserId(Long userId);
     long countByVehicleType_VehicleTypeIdAndStatusIn(Integer vehicleTypeId, List<String> statuses);
     long countByStatusIn(List<String> statuses);
