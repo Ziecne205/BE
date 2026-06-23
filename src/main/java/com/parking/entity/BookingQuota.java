@@ -1,5 +1,6 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,12 +23,13 @@ public class BookingQuota {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "VehicleTypeID", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private VehicleType vehicleType;
 
-    @Column(name = "StartTime", nullable = false)
+    @Column(name = "StartTime", nullable = false, columnDefinition = "TIME")
     private LocalTime startTime;
 
-    @Column(name = "EndTime", nullable = false)
+    @Column(name = "EndTime", nullable = false, columnDefinition = "TIME")
     private LocalTime endTime;
 
     @Column(name = "QuotaPercent", nullable = false)
