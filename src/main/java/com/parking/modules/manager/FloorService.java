@@ -12,8 +12,10 @@ import java.util.List;
 
 /**
  * Vi du CRUD day du cho phan he Quan ly (Manager).
- * Cac entity khac (ParkingSlot, VehicleType, PricingPolicy, BookingQuota...) lam theo cung pattern nay:
- * Request DTO -> Service (validate + map) -> Controller (@PreAuthorize MANAGER/ADMIN).
+ * Cac entity khac (ParkingSlot, VehicleType, PricingPolicy, BookingQuota...)
+ * lam theo cung pattern nay:
+ * Request DTO -> Service (validate + map) -> Controller (@PreAuthorize
+ * MANAGER/ADMIN).
  */
 @Service
 @RequiredArgsConstructor
@@ -23,7 +25,7 @@ public class FloorService {
     private final VehicleTypeRepository vehicleTypeRepository;
 
     public List<Floor> findAll() {
-        return floorRepository.findAll();
+        return floorRepository.findAllWithVehicleType();
     }
 
     public Floor findById(Integer id) {
@@ -54,7 +56,8 @@ public class FloorService {
     }
 
     private VehicleType resolveVehicleType(Integer vehicleTypeId) {
-        if (vehicleTypeId == null) return null;
+        if (vehicleTypeId == null)
+            return null;
         return vehicleTypeRepository.findById(vehicleTypeId)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + vehicleTypeId));
     }

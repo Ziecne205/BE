@@ -14,7 +14,8 @@ import java.util.stream.Collectors;
 /**
  * Giam sat trang thai bai do xe theo thoi gian thuc - Phan he 1 Manager.
  * Cung cap:
- * - Tong quan toan bai (so o trong/co xe/bao tri, so phien dang mo, so su co chua xu ly)
+ * - Tong quan toan bai (so o trong/co xe/bao tri, so phien dang mo, so su co
+ * chua xu ly)
  * - Chi tiet theo tung tang
  * - Ty le lap day (occupancy rate)
  */
@@ -59,7 +60,7 @@ public class DashboardService {
      * Trang thai chi tiet theo tung tang.
      */
     public List<FloorStatusResponse> getFloorStatus() {
-        List<Floor> floors = floorRepository.findAll();
+        List<Floor> floors = floorRepository.findAllWithVehicleType();
         return floors.stream().map(floor -> {
             long total = slotRepository.countByFloor_FloorIdAndStatus(floor.getFloorId(), "Available")
                     + slotRepository.countByFloor_FloorIdAndStatus(floor.getFloorId(), "Occupied")
