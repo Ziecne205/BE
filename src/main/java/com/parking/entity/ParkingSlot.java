@@ -1,5 +1,6 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,6 +20,7 @@ public class ParkingSlot {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "FloorID", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Floor floor;
 
     @Column(name = "Zone")
@@ -29,6 +31,7 @@ public class ParkingSlot {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "VehicleTypeID", nullable = false)
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private VehicleType vehicleType;
 
     @Column(name = "Status")

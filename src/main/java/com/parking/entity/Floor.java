@@ -1,5 +1,6 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,6 +23,7 @@ public class Floor {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "DedicatedVehicleTypeID")
+    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private VehicleType dedicatedVehicleType;
 
     @Column(name = "TotalCapacity", nullable = false)
