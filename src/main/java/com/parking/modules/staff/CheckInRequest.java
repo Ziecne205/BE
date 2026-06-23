@@ -19,7 +19,4 @@ public class CheckInRequest {
     private Integer entryGateId;
 
     private String entryImageUrl;
-
-    /** Truyen ReservationID neu xe nay co dat cho truoc (luong 6.D). */
-    private Long reservationId;
 }
