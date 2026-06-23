@@ -32,7 +32,7 @@ public class ParkingSlotService {
     }
 
     public List<ParkingSlot> findByFloor(Integer floorId) {
-        return slotRepository.findByFloor_FloorId(floorId);
+        return slotRepository.findByFloorIdWithDetails(floorId);
     }
 
     public ParkingSlot findById(Long id) {
