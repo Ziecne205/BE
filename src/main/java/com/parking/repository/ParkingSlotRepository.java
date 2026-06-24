@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ParkingSlotRepository extends JpaRepository<ParkingSlot, Long> {
     List<ParkingSlot> findByVehicleType_VehicleTypeIdAndStatus(Integer vehicleTypeId, String status);
@@ -21,4 +22,11 @@ public interface ParkingSlotRepository extends JpaRepository<ParkingSlot, Long> 
            "LEFT JOIN FETCH s.vehicleType " +
            "WHERE s.floor.floorId = :floorId")
     List<ParkingSlot> findByFloorIdWithDetails(@Param("floorId") Integer floorId);
+
+    @Query("SELECT s FROM ParkingSlot s " +
+           "LEFT JOIN FETCH s.floor f " +
+           "LEFT JOIN FETCH f.dedicatedVehicleType " +
+           "LEFT JOIN FETCH s.vehicleType " +
+           "WHERE s.slotId = :id")
+    Optional<ParkingSlot> findByIdWithDetails(@Param("id") Long id);
 }

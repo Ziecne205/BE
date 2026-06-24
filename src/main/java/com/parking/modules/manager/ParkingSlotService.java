@@ -36,7 +36,7 @@ public class ParkingSlotService {
     }
 
     public ParkingSlot findById(Long id) {
-        return slotRepository.findById(id)
+        return slotRepository.findByIdWithDetails(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay o do #" + id));
     }
 
