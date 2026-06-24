@@ -1,5 +1,6 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -22,6 +23,7 @@ public class User {
     @Column(name = "Username", nullable = false, unique = true)
     private String username;
 
+    @JsonIgnore
     @Column(name = "PasswordHash", nullable = false)
     private String passwordHash;
 
@@ -34,7 +36,7 @@ public class User {
     @Column(name = "Email", unique = true)
     private String email;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "RoleID", nullable = false)
     private Role role;
 

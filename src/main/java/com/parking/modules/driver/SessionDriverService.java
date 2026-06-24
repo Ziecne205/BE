@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@SuppressWarnings("null")
 public class SessionDriverService {
 
     private final ParkingSessionRepository sessionRepository;

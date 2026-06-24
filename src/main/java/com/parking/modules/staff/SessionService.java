@@ -15,6 +15,8 @@ import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@org.springframework.transaction.annotation.Transactional
+@SuppressWarnings("null")
 public class SessionService {
 
     private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");

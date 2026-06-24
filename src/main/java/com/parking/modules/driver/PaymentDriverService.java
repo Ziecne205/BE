@@ -18,6 +18,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@SuppressWarnings("null")
 public class PaymentDriverService {
 
     private final ParkingSessionRepository sessionRepository;

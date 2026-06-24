@@ -1,10 +1,7 @@
 package com.parking.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
-
-import org.hibernate.annotations.Nationalized;
 
 @Entity
 @Table(name = "Floors")
@@ -20,13 +17,11 @@ public class Floor {
     @Column(name = "FloorID")
     private Integer floorId;
 
-    @Nationalized
     @Column(name = "FloorName", nullable = false, unique = true)
     private String floorName;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "DedicatedVehicleTypeID")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private VehicleType dedicatedVehicleType;
 
     @Column(name = "TotalCapacity", nullable = false)

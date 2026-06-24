@@ -16,6 +16,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class VehicleTypeService {
 
     private final VehicleTypeRepository vehicleTypeRepository;

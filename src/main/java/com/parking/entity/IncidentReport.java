@@ -2,7 +2,6 @@ package com.parking.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.Nationalized;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
@@ -33,7 +32,6 @@ public class IncidentReport {
     @Column(name = "IssueType", nullable = false)
     private String issueType;
 
-    @Nationalized
     @Column(name = "Description", nullable = false)
     private String description;
 
@@ -51,7 +49,6 @@ public class IncidentReport {
     @Column(name = "ResolvedAt")
     private LocalDateTime resolvedAt;
 
-    @Nationalized
     @Column(name = "ResolutionNotes")
     private String resolutionNotes;
 

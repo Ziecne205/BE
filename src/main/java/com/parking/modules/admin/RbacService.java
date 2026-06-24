@@ -37,6 +37,7 @@ public class RbacService {
 
     public Set<Permission> getPermissionsByRole(Integer roleId) {
         Role role = findRoleById(roleId);
+        role.getPermissions().size();
         return role.getPermissions();
     }
 
