@@ -30,10 +30,10 @@ public class AuthService {
 
     public LoginResponse login(LoginRequest request) {
         authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+                new UsernamePasswordAuthenticationToken(request.getIdentifier(), request.getPassword()));
 
-        UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        User user = userRepository.findByUsername(request.getUsername())
+        UserDetails userDetails = userDetailsService.loadUserByUsername(request.getIdentifier());
+        User user = userRepository.findByIdentifier(request.getIdentifier())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
 
         String token = jwtService.generateToken(userDetails);
@@ -66,5 +66,15 @@ public class AuthService {
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
         String token = jwtService.generateToken(userDetails);
         return new LoginResponse(token, user.getUsername(), role.getRoleName());
+    }
+
+    public String resetPassword(ResetPasswordRequest request) {
+        User user = userRepository.findByIdentifier(request.getIdentifier())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
+                
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        
+        return "Doi mat khau thanh cong";
     }
 }

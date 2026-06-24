@@ -49,3 +49,5 @@ public class User {
     @Column(name = "UpdatedAt")
     private LocalDateTime updatedAt;
 }
+// IDE trigger
+

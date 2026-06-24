@@ -16,8 +16,9 @@ Authorization: Bearer <token>
 
 | Method | Endpoint | Mô tả | Body |
 |--------|----------|--------|------|
-| POST | `/api/auth/login` | Đăng nhập | `{ username, password }` |
+| POST | `/api/auth/login` | Đăng nhập | `{ identifier, password }` <br>*(identifier có thể là username, email, phoneNumber)* |
 | POST | `/api/auth/register` | Đăng ký | `{ username, password, fullName, email, phoneNumber, roleName }` |
+| POST | `/api/auth/reset-password` | Đặt lại mật khẩu (Không cần OTP) | `{ identifier, newPassword }` |
 
 **Response login/register:**
 ```json

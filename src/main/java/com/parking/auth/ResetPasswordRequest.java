@@ -8,13 +8,14 @@ import lombok.Setter;
 
 @Getter
 @Setter
-public class LoginRequest {
+public class ResetPasswordRequest {
 
     @NotBlank(message = "Identifier khong duoc trong")
     @JsonAlias({"username", "email", "phoneNumber"})
     @JsonProperty("identifier")
     private String identifier;
 
-    @NotBlank(message = "Password khong duoc trong")
-    private String password;
+    @NotBlank(message = "Mat khau moi khong duoc trong")
+    private String newPassword;
+
 }
