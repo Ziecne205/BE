@@ -19,6 +19,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@SuppressWarnings("null")
 public class FloorService {
 
     private final FloorRepository floorRepository;
