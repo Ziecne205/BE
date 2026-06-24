@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "Feedback")
@@ -21,10 +22,12 @@ public class Feedback {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SessionID", nullable = false)
+    @JsonIgnore
     private ParkingSession session;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "UserID", nullable = false)
+    @JsonIgnore
     private User user;
 
     @Column(name = "Rating", nullable = false)

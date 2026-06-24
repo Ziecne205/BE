@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "Payments")
@@ -22,10 +23,12 @@ public class Payment {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SessionID", nullable = false)
+    @JsonIgnore
     private ParkingSession session;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ReservationID")
+    @JsonIgnore
     private Reservation reservation;
 
     @Column(name = "Amount", nullable = false)

@@ -18,4 +18,3 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     List<Payment> findBySession_SessionId(Long sessionId);
 }
-
