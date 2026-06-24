@@ -1,11 +1,10 @@
 package com.parking.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.Nationalized;
-
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
 @Table(name = "IncidentReports")
@@ -23,15 +22,14 @@ public class IncidentReport {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "SessionID")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnore
     private ParkingSession session;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ReportedByUserID", nullable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnore
     private User reportedBy;
 
-    @Nationalized
     @Column(name = "IssueType", nullable = false)
     private String issueType;
 
@@ -42,13 +40,12 @@ public class IncidentReport {
     @Column(name = "ProofImageURL")
     private String proofImageUrl;
 
-    @Nationalized
     @Column(name = "Status")
     private String status; // Open, InProgress, Resolved
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "HandledByStaffID")
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+    @JsonIgnore
     private User handledByStaff;
 
     @Column(name = "ResolvedAt")
@@ -57,4 +54,18 @@ public class IncidentReport {
     @Nationalized
     @Column(name = "ResolutionNotes")
     private String resolutionNotes;
+
+    // Các Getter này giúp Jackson tự động lấy ID ra JSON mà KHÔNG cần khởi tạo
+    // proxy của Hibernate
+    public Long getSessionId() {
+        return session != null ? session.getSessionId() : null;
+    }
+
+    public Long getReportedByUserId() {
+        return reportedBy != null ? reportedBy.getUserId() : null;
+    }
+
+    public Long getHandledByStaffId() {
+        return handledByStaff != null ? handledByStaff.getUserId() : null;
+    }
 }
