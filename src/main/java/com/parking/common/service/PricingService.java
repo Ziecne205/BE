@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
-@SuppressWarnings("null")
 public class PricingService {
 
     @Autowired

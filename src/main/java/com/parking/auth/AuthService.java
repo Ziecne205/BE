@@ -19,7 +19,6 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -41,6 +40,7 @@ public class AuthService {
         return new LoginResponse(token, user.getUsername(), user.getRole().getRoleName());
     }
 
+    @SuppressWarnings("null")
     public LoginResponse register(RegisterRequest request) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new BusinessRuleException("Username da ton tai");
