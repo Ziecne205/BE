@@ -4,8 +4,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
-import org.hibernate.annotations.Nationalized;
-
 @Entity
 @Table(name = "ParkingSlots")
 @Getter
@@ -25,7 +23,6 @@ public class ParkingSlot {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Floor floor;
 
-    @Nationalized
     @Column(name = "Zone")
     private String zone;
 
