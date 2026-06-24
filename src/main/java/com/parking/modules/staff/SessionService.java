@@ -27,6 +27,7 @@ public class SessionService {
     private final ReservationRepository reservationRepository;
     private final PricingPolicyRepository pricingPolicyRepository;
     private final PaymentRepository paymentRepository;
+    private final ParkingCardRepository parkingCardRepository;
     private final AuditLogRepository auditLogRepository;
 
     /**
@@ -102,9 +103,6 @@ public class SessionService {
                 .build();
     }
 
-    /**
-     * Tien luon tinh tu EntryTime (Admitted) den luc quet cong ra, doc lap viec xe co Parked hay khong (muc 6.B).
-     */
     @Transactional
     public CheckOutResponse checkOut(CheckOutRequest request) {
         ParkingSession session = sessionRepository
@@ -121,7 +119,12 @@ public class SessionService {
                         session.getVehicleType().getVehicleTypeId(), "Active")
                 .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
 
-        BigDecimal amount = calculateAmount(policy, minutes, request.isLostTicket());
+        boolean lostTicket = request.isLostTicket();
+        BigDecimal amount = calculateAmount(policy, minutes, lostTicket);
+        BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
+                ? policy.getLostTicketFee() : BigDecimal.ZERO;
+
+        boolean plateMismatch = !session.getLicensePlateIn().equalsIgnoreCase(request.getLicensePlate());
 
         session.setLicensePlateOut(request.getLicensePlate());
         session.setExitImageUrl(request.getExitImageUrl());
@@ -136,17 +139,95 @@ public class SessionService {
             reservationRepository.save(reservation);
         }
 
+        String slotFreed = null;
+        if (session.getActualSlot() != null) {
+            ParkingSlot slot = session.getActualSlot();
+            slot.setStatus("Available");
+            slotRepository.save(slot);
+            slotFreed = slot.getSlotCode();
+        }
+
+        boolean cardReturned = false;
+        if (session.getCard() != null) {
+            ParkingCard card = session.getCard();
+            if (lostTicket) {
+                card.setStatus("Lost");
+            } else {
+                card.setStatus("Active");
+                cardReturned = true;
+            }
+            parkingCardRepository.save(card);
+        }
+
+        String paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
         Payment payment = Payment.builder()
                 .session(session)
                 .reservation(session.getReservation())
                 .amount(amount)
-                .paymentMethod(request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod())
+                .paymentMethod(paymentMethod)
                 .paymentTime(exitTime)
                 .paymentStatus("Success")
                 .build();
         paymentRepository.save(payment);
 
-        return new CheckOutResponse(session.getSessionId(), minutes, amount);
+        AuditLog log = AuditLog.builder()
+                .action("STAFF_CHECK_OUT")
+                .entityName("ParkingSession")
+                .entityId(String.valueOf(session.getSessionId()))
+                .detail("Staff checked out vehicle: " + request.getLicensePlate()
+                        + " | " + minutes + " min | " + amount + " VND"
+                        + (lostTicket ? " | LOST TICKET" : "")
+                        + (plateMismatch ? " | PLATE MISMATCH (in=" + session.getLicensePlateIn() + ")" : ""))
+                .createdAt(exitTime)
+                .build();
+        auditLogRepository.save(log);
+
+        return CheckOutResponse.builder()
+                .sessionId(session.getSessionId())
+                .licensePlateIn(session.getLicensePlateIn())
+                .licensePlateOut(request.getLicensePlate())
+                .plateMismatch(plateMismatch)
+                .entryTime(session.getEntryTime())
+                .exitTime(exitTime)
+                .parkedMinutes(minutes)
+                .vehicleTypeName(session.getVehicleType().getTypeName())
+                .amount(amount)
+                .lostTicketFee(lostTicketFee)
+                .paymentMethod(paymentMethod)
+                .paymentStatus("Success")
+                .exitGateName(exitGate.getGateName())
+                .slotFreed(slotFreed)
+                .cardReturned(cardReturned)
+                .build();
+    }
+
+    public List<ActiveSessionDto> getActiveSessions() {
+        List<ParkingSession> sessions = sessionRepository.findByStatusIn(OPEN_SESSION_STATUSES);
+        LocalDateTime now = LocalDateTime.now();
+        return sessions.stream().map(s -> toActiveSessionDto(s, now)).toList();
+    }
+
+    public ActiveSessionDto searchActiveByPlate(String licensePlate) {
+        ParkingSession session = sessionRepository
+                .findFirstByLicensePlateInAndStatusIn(licensePlate, OPEN_SESSION_STATUSES)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so: " + licensePlate));
+        return toActiveSessionDto(session, LocalDateTime.now());
+    }
+
+    private ActiveSessionDto toActiveSessionDto(ParkingSession s, LocalDateTime now) {
+        return ActiveSessionDto.builder()
+                .sessionId(s.getSessionId())
+                .licensePlateIn(s.getLicensePlateIn())
+                .vehicleTypeName(s.getVehicleType().getTypeName())
+                .entryTime(s.getEntryTime())
+                .entryGateName(s.getEntryGate().getGateName())
+                .status(s.getStatus())
+                .suggestedSlotCode(s.getSuggestedSlot() != null ? s.getSuggestedSlot().getSlotCode() : null)
+                .actualSlotCode(s.getActualSlot() != null ? s.getActualSlot().getSlotCode() : null)
+                .hasReservation(s.getReservation() != null)
+                .hasCard(s.getCard() != null)
+                .parkedMinutes(Duration.between(s.getEntryTime(), now).toMinutes())
+                .build();
     }
 
     private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket) {
