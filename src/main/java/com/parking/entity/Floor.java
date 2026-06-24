@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
+import org.hibernate.annotations.Nationalized;
+
 @Entity
 @Table(name = "Floors")
 @Getter
@@ -18,6 +20,7 @@ public class Floor {
     @Column(name = "FloorID")
     private Integer floorId;
 
+    @Nationalized
     @Column(name = "FloorName", nullable = false, unique = true)
     private String floorName;
 

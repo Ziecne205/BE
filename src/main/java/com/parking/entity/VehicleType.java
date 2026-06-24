@@ -3,6 +3,8 @@ package com.parking.entity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import org.hibernate.annotations.Nationalized;
+
 @Entity
 @Table(name = "VehicleTypes")
 @Getter
@@ -17,9 +19,11 @@ public class VehicleType {
     @Column(name = "VehicleTypeID")
     private Integer vehicleTypeId;
 
+    @Nationalized
     @Column(name = "TypeName", nullable = false, unique = true)
     private String typeName;
 
+    @Nationalized
     @Column(name = "Dimensions")
     private String dimensions;
 }

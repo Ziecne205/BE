@@ -3,6 +3,7 @@ package com.parking.entity;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.Nationalized;
 
 import java.time.LocalDateTime;
 
@@ -30,15 +31,18 @@ public class IncidentReport {
     @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private User reportedBy;
 
+    @Nationalized
     @Column(name = "IssueType", nullable = false)
     private String issueType;
 
+    @Nationalized
     @Column(name = "Description", nullable = false)
     private String description;
 
     @Column(name = "ProofImageURL")
     private String proofImageUrl;
 
+    @Nationalized
     @Column(name = "Status")
     private String status; // Open, InProgress, Resolved
 
@@ -50,6 +54,7 @@ public class IncidentReport {
     @Column(name = "ResolvedAt")
     private LocalDateTime resolvedAt;
 
+    @Nationalized
     @Column(name = "ResolutionNotes")
     private String resolutionNotes;
 }
