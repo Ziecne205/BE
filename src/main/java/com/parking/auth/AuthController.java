@@ -23,4 +23,9 @@ public class AuthController {
     public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ApiResponse.ok("Dang ky thanh cong", authService.register(request));
     }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<String> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        return ApiResponse.ok(authService.resetPassword(request));
+    }
 }
