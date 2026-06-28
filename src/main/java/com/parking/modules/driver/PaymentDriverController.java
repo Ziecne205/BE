@@ -17,10 +17,12 @@ public class PaymentDriverController {
 
     private final PaymentDriverService paymentDriverService;
 
-    @PostMapping("/checkout")
-    public ApiResponse<String> checkout(@RequestBody PaymentRequest request, Authentication auth) {
-        return ApiResponse.ok("URL thanh toan duoc tao thanh cong", paymentDriverService.createMockPaymentUrl(request, auth.getName()));
+    @PostMapping("/payos/create-link")
+    public ApiResponse<PayosLinkResponse> createPayosLink(@RequestBody PayosLinkRequest request, Authentication auth) {
+        return ApiResponse.ok("URL thanh toan duoc tao thanh cong", paymentDriverService.createPayosLink(request, auth.getName()));
     }
+
+    @PostMapping("/checkout")
 
     @PostMapping("/mock-callback")
     public ApiResponse<Payment> mockCallback(@RequestParam String txnRef, @RequestParam Long sessionId, @RequestParam String status) {
