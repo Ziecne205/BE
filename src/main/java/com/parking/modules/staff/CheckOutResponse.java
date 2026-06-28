@@ -20,10 +20,10 @@ public class CheckOutResponse {
     private long parkedMinutes;
     private String vehicleTypeName;
     private BigDecimal amount;
-    private BigDecimal lostTicketFee;
+    private BigDecimal depositApplied;
+    private BigDecimal overstayFee;
     private String paymentMethod;
     private String paymentStatus;
     private String exitGateName;
     private String slotFreed;
-    private boolean cardReturned;
 }

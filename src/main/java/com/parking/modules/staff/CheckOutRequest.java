@@ -18,7 +18,4 @@ public class CheckOutRequest {
     private String exitImageUrl;
 
     private String paymentMethod; // Cash, QR, Card...
-
-    /** Danh dau xe bi mat ve de tinh phu phi LostTicketFee. */
-    private boolean lostTicket;
 }

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentDriverController {
 
     private final PaymentDriverService paymentDriverService;
+    private final ReservationService reservationService;
 
     @PostMapping("/checkout")
     public ApiResponse<String> checkout(@RequestBody PaymentRequest request, Authentication auth) {
@@ -23,7 +24,21 @@ public class PaymentDriverController {
     }
 
     @PostMapping("/mock-callback")
-    public ApiResponse<Payment> mockCallback(@RequestParam String txnRef, @RequestParam Long sessionId, @RequestParam String status) {
-        return ApiResponse.ok("Cap nhat thanh toan thanh cong", paymentDriverService.processMockCallback(txnRef, sessionId, status));
+    public ApiResponse<Payment> mockCallback(
+            @RequestParam String txnRef, 
+            @RequestParam(required = false) Long sessionId, 
+            @RequestParam(required = false) Long reservationId,
+            @RequestParam String status) {
+        
+        if (reservationId != null && "Success".equalsIgnoreCase(status)) {
+            reservationService.confirmDeposit(reservationId);
+            return ApiResponse.ok("Cap nhat thanh toan coc thanh cong", null);
+        }
+        
+        if (sessionId != null) {
+            return ApiResponse.ok("Cap nhat thanh toan session thanh cong", paymentDriverService.processMockCallback(txnRef, sessionId, status));
+        }
+        
+        return ApiResponse.fail("Thieu sessionId hoac reservationId");
     }
 }

@@ -10,7 +10,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.List;
+import com.parking.modules.manager.FeeConfigService;
+import com.parking.modules.manager.FeeConfigDTO;
 
 /**
  * Vi du CRUD day du cho phan he Khach hang / Lai xe (Driver).
@@ -21,14 +24,12 @@ import java.util.List;
 @SuppressWarnings("null")
 public class ReservationService {
 
-    private static final BigDecimal DEPOSIT_PERCENT = BigDecimal.valueOf(0.20); // coc 20% gia co ban (muc 8.2)
-
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
     private final ParkingSlotRepository slotRepository;
     private final BookingQuotaRepository bookingQuotaRepository;
-    private final PricingPolicyRepository pricingPolicyRepository;
+    private final FeeConfigService feeConfigService;
 
     @Transactional
     public Reservation create(ReservationRequest request, String username) {
@@ -43,11 +44,11 @@ public class ReservationService {
 
         checkQuota(request, vehicleType);
 
-        PricingPolicy policy = pricingPolicyRepository
-                .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(
-                        vehicleType.getVehicleTypeId(), "Active")
-                .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
-        BigDecimal deposit = policy.getBasePrice().multiply(DEPOSIT_PERCENT);
+        FeeConfigDTO feeConfig = feeConfigService.getFeeConfig();
+        long minutes = Duration.between(request.getExpectedEntryTime(), request.getExpectedExitTime()).toMinutes();
+        long expectedHours = (long) Math.ceil(minutes / 60.0);
+        BigDecimal expectedTotalFee = feeConfig.getHourlyRate().multiply(BigDecimal.valueOf(expectedHours));
+        BigDecimal deposit = expectedTotalFee.multiply(feeConfig.getDepositPercent()).divide(BigDecimal.valueOf(100));
 
         Reservation reservation = Reservation.builder()
                 .user(user)
@@ -113,5 +114,15 @@ public class ReservationService {
         }
         reservation.setStatus("Cancelled");
         return reservationRepository.save(reservation);
+    }
+    
+    @Transactional
+    public void confirmDeposit(Long id) {
+        Reservation reservation = findById(id);
+        if ("Pending".equals(reservation.getStatus()) && "Pending".equals(reservation.getDepositStatus())) {
+            reservation.setDepositStatus("Paid");
+            reservation.setStatus("Confirmed");
+            reservationRepository.save(reservation);
+        }
     }
 }
