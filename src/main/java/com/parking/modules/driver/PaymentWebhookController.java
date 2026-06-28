@@ -8,8 +8,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import vn.payos.PayOS;
-import vn.payos.type.Webhook;
-import vn.payos.type.WebhookData;
+import vn.payos.model.webhooks.WebhookData;
 
 import java.util.Map;
 
@@ -24,7 +23,7 @@ public class PaymentWebhookController {
     @PostMapping("/webhook")
     public ResponseEntity<?> payosWebhook(@RequestBody ObjectNode body) {
         try {
-            WebhookData webhookData = payOS.verifyPaymentWebhookData(body);
+            WebhookData webhookData = payOS.webhooks().verify(body);
             paymentDriverService.handlePayosWebhook(webhookData);
             return ResponseEntity.ok(Map.of("success", true, "message", "Webhook verified and processed"));
         } catch (Exception e) {

@@ -15,10 +15,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import vn.payos.PayOS;
-import vn.payos.type.CheckoutResponseData;
-import vn.payos.type.ItemData;
-import vn.payos.type.PaymentData;
-import vn.payos.type.WebhookData;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkRequest;
+import vn.payos.model.v2.paymentRequests.CreatePaymentLinkResponse;
+import vn.payos.model.webhooks.WebhookData;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -130,15 +129,15 @@ public class PaymentDriverService {
         paymentRepository.save(payment);
 
         try {
-            PaymentData paymentData = PaymentData.builder()
+            CreatePaymentLinkRequest paymentData = CreatePaymentLinkRequest.builder()
                     .orderCode(orderCode)
-                    .amount(amount > 0 ? (int) amount : 2000)
+                    .amount(amount > 0 ? amount : 2000L)
                     .description(description.length() > 25 ? description.substring(0, 25) : description)
                     .returnUrl("http://localhost:3000/payment/success")
                     .cancelUrl("http://localhost:3000/payment/cancel")
                     .build();
 
-            CheckoutResponseData data = payOS.createPaymentLink(paymentData);
+            CreatePaymentLinkResponse data = payOS.paymentRequests().create(paymentData);
 
             return PayosLinkResponse.builder()
                     .checkoutUrl(data.getCheckoutUrl())
