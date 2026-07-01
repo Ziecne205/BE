@@ -162,6 +162,49 @@ public class PayosService {
         });
     }
 
+    @Transactional
+    public void verifyPaymentStatus(long orderCode) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.set("x-client-id", clientId);
+        headers.set("x-api-key", apiKey);
+
+        JsonNode root;
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.exchange(
+                    CREATE_URL + "/" + orderCode, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
+            root = resp.getBody();
+        } catch (Exception e) {
+            throw new BusinessRuleException("Loi goi PayOS de kiem tra giao dich: " + e.getMessage(), "PAYOS_ERROR");
+        }
+        if (root == null || !"00".equals(root.path("code").asText())) {
+            String desc = root == null ? "khong co phan hoi" : root.path("desc").asText();
+            throw new BusinessRuleException("Khong the lay thong tin tu PayOS: " + desc, "PAYOS_ERROR");
+        }
+
+        JsonNode data = root.path("data");
+        String status = data.path("status").asText();
+
+        if ("PAID".equals(status)) {
+            paymentRepository.findFirstByTransactionReference(String.valueOf(orderCode)).ifPresent(payment -> {
+                if ("Success".equals(payment.getPaymentStatus())) {
+                    return;
+                }
+                payment.setPaymentStatus("Success");
+                payment.setPaymentTime(LocalDateTime.now());
+                paymentRepository.save(payment);
+
+                Reservation r = payment.getReservation();
+                if (r != null && "Pending".equals(r.getStatus())) {
+                    r.setDepositStatus("Paid");
+                    r.setStatus("Confirmed");
+                    reservationRepository.save(r);
+                }
+            });
+        } else {
+            throw new BusinessRuleException("Giao dich nay chua duoc thanh toan (trang thai PayOS: " + status + ")", "PAYMENT_NOT_PAID");
+        }
+    }
+
     /** Chu ky cua object data: HMAC_SHA256 cua "k=v&..." voi key sap xep alphabet. */
     private String signOfData(JsonNode data) {
         TreeMap<String, String> sorted = new TreeMap<>();

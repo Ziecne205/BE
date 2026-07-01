@@ -22,7 +22,4 @@ public class RegisterRequest {
 
     @Email
     private String email;
-
-    /** Mac dinh la "Driver" neu khong truyen - chi Admin moi duoc tao Manager/Staff. */
-    private String roleName;
 }

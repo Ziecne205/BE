@@ -4,6 +4,7 @@ import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.PricingService;
 import com.parking.entity.ParkingSession;
+import com.parking.entity.Payment;
 import com.parking.entity.User;
 import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.PaymentRepository;

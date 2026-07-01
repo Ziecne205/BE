@@ -30,6 +30,8 @@ public class ReservationService {
     private final BookingQuotaRepository bookingQuotaRepository;
     private final PricingPolicyRepository pricingPolicyRepository;
     private final FeeConfigService feeConfigService;
+    private final PaymentRepository paymentRepository;
+    private final PayosService payosService;
 
     @Transactional
     public Reservation create(ReservationRequest request, String username) {
@@ -189,8 +191,16 @@ public class ReservationService {
         if (!"Pending".equals(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong o trang thai cho thanh toan coc");
         }
-        reservation.setDepositStatus("Paid");
-        reservation.setStatus("Confirmed");
-        return reservationRepository.save(reservation);
+        
+        Payment payment = paymentRepository.findFirstByReservation_ReservationIdOrderByPaymentIdDesc(id)
+                .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich cho booking nay"));
+                
+        if (payment.getTransactionReference() == null) {
+            throw new BusinessRuleException("Giao dich khong co ma tham chieu (orderCode)");
+        }
+        
+        payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));
+        
+        return reservationRepository.findById(id).orElseThrow();
     }
 }

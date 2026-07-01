@@ -19,6 +19,11 @@ public class UserAdminController {
 
     private final UserAdminService userAdminService;
 
+    @PostMapping
+    public ApiResponse<User> createUser(@Valid @RequestBody AdminUserCreationRequest request) {
+        return ApiResponse.ok("Tao nguoi dung thanh cong", userAdminService.createUser(request));
+    }
+
     @GetMapping
     public ApiResponse<List<User>> findAll() {
         return ApiResponse.ok(userAdminService.findAll());

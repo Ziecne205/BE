@@ -46,10 +46,9 @@ public class AuthService {
             throw new BusinessRuleException("Username da ton tai");
         }
 
-        String roleName = (request.getRoleName() == null || request.getRoleName().isBlank())
-                ? "Driver" : request.getRoleName();
-        Role role = roleRepository.findByRoleName(roleName)
-                .orElseThrow(() -> new ResourceNotFoundException("Role khong hop le: " + roleName));
+        // Force role Driver for all public registrations
+        Role role = roleRepository.findByRoleName("Driver")
+                .orElseThrow(() -> new BusinessRuleException("He thong chua cau hinh Role Driver"));
 
         User user = User.builder()
                 .username(request.getUsername())
