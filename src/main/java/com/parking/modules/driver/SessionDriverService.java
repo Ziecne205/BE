@@ -2,7 +2,6 @@ package com.parking.modules.driver;
 
 import com.parking.common.service.PricingService;
 import com.parking.entity.ParkingSession;
-import com.parking.entity.Payment;
 import com.parking.entity.User;
 import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.PaymentRepository;
