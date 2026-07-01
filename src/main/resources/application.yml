@@ -35,3 +35,8 @@ app:
   jwt:
     secret: change-this-secret-to-a-long-random-string-in-production-min-32-chars
     expiration-ms: 86400000 # 24h
+
+payos:
+  client-id: ${PAYOS_CLIENT_ID}
+  api-key: ${PAYOS_API_KEY}
+  checksum-key: ${PAYOS_CHECKSUM_KEY}

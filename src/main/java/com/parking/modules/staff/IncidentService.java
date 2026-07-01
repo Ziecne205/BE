@@ -40,6 +40,7 @@ public class IncidentService {
                 .description(request.getDescription())
                 .proofImageUrl(request.getProofImageUrl())
                 .status("Open")
+                .createdAt(LocalDateTime.now())
                 .build();
         return incidentRepository.save(incident);
     }

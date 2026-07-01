@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SlotAvailabilityDTO {
+    private Integer vehicleTypeId;
     private String vehicleTypeName;
     private long totalSlots;
     private long availableSlots;

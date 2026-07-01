@@ -21,7 +21,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessRuleException.class)
     public ResponseEntity<ApiResponse<Object>> handleBusinessRule(BusinessRuleException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.fail(ex.getMessage()));
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.fail(ex.getMessage(), ex.getErrorCode()));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

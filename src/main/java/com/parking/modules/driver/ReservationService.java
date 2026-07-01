@@ -71,6 +71,7 @@ public class ReservationService {
         var entryTimeOfDay = request.getExpectedEntryTime().toLocalTime();
 
         BookingQuota applicable = quotas.stream()
+                .filter(q -> !Boolean.FALSE.equals(q.getIsActive())) // quota tat -> bo qua
                 .filter(q -> q.getVehicleType().getVehicleTypeId().equals(vehicleType.getVehicleTypeId()))
                 .filter(q -> !entryTimeOfDay.isBefore(q.getStartTime()) && entryTimeOfDay.isBefore(q.getEndTime()))
                 .findFirst().orElse(null);
@@ -87,8 +88,15 @@ public class ReservationService {
                         request.getExpectedExitTime(), request.getExpectedEntryTime());
 
         if (currentBooked >= quotaLimit) {
-            throw new BusinessRuleException("Khung gio nay da het quota dat cho (" + currentBooked + "/" + quotaLimit + ")");
+            throw new BusinessRuleException(
+                    "Khung gio nay da het quota dat cho (" + currentBooked + "/" + quotaLimit + ")",
+                    "QUOTA_FULL");
         }
+    }
+
+    /** Danh sach toan bo dat cho - phuc vu man Quan ly (Manager/Admin). */
+    public List<Reservation> findAll() {
+        return reservationRepository.findAll();
     }
 
     public List<Reservation> findMyReservations(String username) {

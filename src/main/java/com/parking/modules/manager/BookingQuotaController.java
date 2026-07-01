@@ -51,6 +51,12 @@ public class BookingQuotaController {
         return ApiResponse.ok("Cap nhat quota thanh cong", bookingQuotaService.update(id, request));
     }
 
+    @PatchMapping("/{id}/toggle")
+    @Operation(summary = "Bat/tat hieu luc quota (khong xoa)")
+    public ApiResponse<BookingQuota> toggle(@PathVariable Integer id) {
+        return ApiResponse.ok("Da doi trang thai quota", bookingQuotaService.toggle(id));
+    }
+
     @DeleteMapping("/{id}")
     @Operation(summary = "Xoa cau hinh quota (xoa khung gio dat cho)")
     public ApiResponse<Void> delete(@PathVariable Integer id) {

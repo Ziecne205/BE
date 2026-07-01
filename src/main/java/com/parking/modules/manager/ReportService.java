@@ -1,8 +1,10 @@
 package com.parking.modules.manager;
 
 import com.parking.entity.ParkingSession;
+import com.parking.entity.Payment;
 import com.parking.repository.PaymentRepository;
 import com.parking.repository.ParkingSessionRepository;
+import com.parking.repository.ParkingSlotRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -11,9 +13,11 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 /**
@@ -30,6 +34,7 @@ public class ReportService {
 
     private final ParkingSessionRepository sessionRepository;
     private final PaymentRepository paymentRepository;
+    private final ParkingSlotRepository slotRepository;
 
     private static final List<String> ACTIVE_STATUSES = List.of("Admitted", "Parked", "Moved");
 
@@ -100,5 +105,65 @@ public class ReportService {
                 .peakHour(peakHour)
                 .peakHourCount(peakHourCount)
                 .build();
+    }
+
+    /**
+     * Doanh thu theo tung ngay trong khoang (chuoi thoi gian cho bieu do).
+     * occupancyRate la uoc luong tho: so phien/ngay tren suc chua hien tai.
+     */
+    public List<ReportSeries.RevenuePoint> getRevenueDaily(LocalDate fromDate, LocalDate toDate) {
+        LocalDateTime from = fromDate.atStartOfDay();
+        LocalDateTime to = toDate.atTime(LocalTime.MAX);
+
+        long capacity = slotRepository.count() - slotRepository.countByStatus("Maintenance");
+
+        Map<LocalDate, BigDecimal> revenueByDay = new TreeMap<>();
+        Map<LocalDate, Long> sessionsByDay = new TreeMap<>();
+        for (Payment p : paymentRepository.findByPaymentTimeBetween(from, to)) {
+            if (!"Success".equals(p.getPaymentStatus()) || p.getPaymentTime() == null) continue;
+            LocalDate day = p.getPaymentTime().toLocalDate();
+            revenueByDay.merge(day, p.getAmount() == null ? BigDecimal.ZERO : p.getAmount(), BigDecimal::add);
+            sessionsByDay.merge(day, 1L, Long::sum);
+        }
+
+        List<ReportSeries.RevenuePoint> points = new ArrayList<>();
+        for (LocalDate d = fromDate; !d.isAfter(toDate); d = d.plusDays(1)) {
+            long sessions = sessionsByDay.getOrDefault(d, 0L);
+            BigDecimal revenue = revenueByDay.getOrDefault(d, BigDecimal.ZERO);
+            double occ = capacity > 0 ? Math.min(100.0, Math.round((double) sessions / capacity * 1000.0) / 10.0) : 0;
+            points.add(new ReportSeries.RevenuePoint(d.toString(), revenue, sessions, occ));
+        }
+        return points;
+    }
+
+    /**
+     * Phan bo luu luong theo khung 2 gio (profile mot ngay dien hinh gom ca khoang).
+     * inside = cong don (entries - exits) qua cac khung.
+     */
+    public List<ReportSeries.OccupancyWindow> getOccupancyHourly(LocalDate fromDate, LocalDate toDate) {
+        LocalDateTime from = fromDate.atStartOfDay();
+        LocalDateTime to = toDate.atTime(LocalTime.MAX);
+
+        List<ParkingSession> sessions = sessionRepository.findByEntryTimeBetween(from, to);
+
+        long[] entries = new long[12]; // 12 khung 2 gio: 0-2, 2-4, ... 22-24
+        long[] exits = new long[12];
+        for (ParkingSession s : sessions) {
+            entries[s.getEntryTime().getHour() / 2]++;
+            if (s.getExitTime() != null) {
+                exits[s.getExitTime().getHour() / 2]++;
+            }
+        }
+
+        List<ReportSeries.OccupancyWindow> windows = new ArrayList<>();
+        long inside = 0;
+        for (int i = 0; i < 12; i++) {
+            inside = Math.max(0, inside + entries[i] - exits[i]);
+            windows.add(new ReportSeries.OccupancyWindow(
+                    String.format("%02d:00", i * 2),
+                    String.format("%02d:00", (i * 2 + 2) % 24),
+                    entries[i], exits[i], inside));
+        }
+        return windows;
     }
 }

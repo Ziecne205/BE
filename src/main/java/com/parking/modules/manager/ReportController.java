@@ -37,4 +37,20 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
         return ApiResponse.ok("Bao cao luu luong xe", reportService.getTrafficReport(fromDate, toDate));
     }
+
+    @GetMapping("/revenue-daily")
+    @Operation(summary = "Doanh thu theo tung ngay (chuoi thoi gian)")
+    public ApiResponse<java.util.List<ReportSeries.RevenuePoint>> getRevenueDaily(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        return ApiResponse.ok("Doanh thu theo ngay", reportService.getRevenueDaily(fromDate, toDate));
+    }
+
+    @GetMapping("/occupancy-hourly")
+    @Operation(summary = "Phan bo luu luong theo khung 2 gio")
+    public ApiResponse<java.util.List<ReportSeries.OccupancyWindow>> getOccupancyHourly(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate) {
+        return ApiResponse.ok("Phan bo luu luong", reportService.getOccupancyHourly(fromDate, toDate));
+    }
 }

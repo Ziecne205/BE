@@ -34,4 +34,9 @@ public class BookingQuota {
 
     @Column(name = "QuotaPercent", nullable = false)
     private BigDecimal quotaPercent; // % of C, theo loai xe, khong theo tang
+
+    /** Bat/tat hieu luc quota. Quota tat -> khong ap tran (khong chan dat cho). */
+    @Column(name = "IsActive")
+    @Builder.Default
+    private Boolean isActive = true;
 }

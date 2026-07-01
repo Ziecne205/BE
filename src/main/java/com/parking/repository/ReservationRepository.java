@@ -12,6 +12,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     long countByVehicleType_VehicleTypeIdAndStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
             Integer vehicleTypeId, List<String> statuses, LocalDateTime end, LocalDateTime start);
 
+    long countByStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
+            List<String> statuses, LocalDateTime end, LocalDateTime start);
+
     List<Reservation> findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
             String licensePlate, Integer vehicleTypeId, List<String> statuses, LocalDateTime time);
 }

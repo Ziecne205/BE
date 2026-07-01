@@ -17,6 +17,7 @@ public interface ParkingSlotRepository extends JpaRepository<ParkingSlot, Long> 
     long countByStatus(String status);
     long countByFloor_FloorIdAndStatus(Integer floorId, String status);
     boolean existsBySlotCode(String slotCode);
+    Optional<ParkingSlot> findBySlotCode(String slotCode);
 
     @Query("SELECT s FROM ParkingSlot s " +
            "LEFT JOIN FETCH s.floor " +

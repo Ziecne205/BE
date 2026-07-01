@@ -1,0 +1,17 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PayOS credentials — LOCAL ONLY.
+#
+# 1. Copy this file to  application-local.yml  (same folder).
+# 2. Paste your three keys from the PayOS dashboard below.
+# 3. Run the backend with the `local` profile active, either:
+#       ./mvnw spring-boot:run -Dspring-boot.run.profiles=local
+#    or set an env var before starting:
+#       SPRING_PROFILES_ACTIVE=local        (PowerShell:  $env:SPRING_PROFILES_ACTIVE="local")
+#
+# application-local.yml is gitignored, so your keys never get committed.
+# Values here override the ${PAYOS_*} placeholders in application.yml.
+# ─────────────────────────────────────────────────────────────────────────────
+payos:
+  client-id: YOUR_PAYOS_CLIENT_ID
+  api-key: YOUR_PAYOS_API_KEY
+  checksum-key: YOUR_PAYOS_CHECKSUM_KEY

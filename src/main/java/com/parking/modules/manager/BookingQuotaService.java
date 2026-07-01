@@ -51,7 +51,15 @@ public class BookingQuotaService {
                 .startTime(request.getStartTime())
                 .endTime(request.getEndTime())
                 .quotaPercent(request.getQuotaPercent())
+                .isActive(true)
                 .build();
+        return bookingQuotaRepository.save(quota);
+    }
+
+    @Transactional
+    public BookingQuota toggle(Integer id) {
+        BookingQuota quota = findById(id);
+        quota.setIsActive(!Boolean.TRUE.equals(quota.getIsActive()));
         return bookingQuotaRepository.save(quota);
     }
 

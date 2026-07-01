@@ -52,6 +52,9 @@ public class IncidentReport {
     @Column(name = "ResolutionNotes")
     private String resolutionNotes;
 
+    @Column(name = "CreatedAt")
+    private LocalDateTime createdAt;
+
     // Các Getter này giúp Jackson tự động lấy ID ra JSON mà KHÔNG cần khởi tạo
     // proxy của Hibernate
     public Long getSessionId() {

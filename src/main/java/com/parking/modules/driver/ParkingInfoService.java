@@ -61,6 +61,7 @@ public class ParkingInfoService {
             totalAvailableSlots += available;
 
             availabilityList.add(SlotAvailabilityDTO.builder()
+                    .vehicleTypeId(vt.getVehicleTypeId())
                     .vehicleTypeName(vt.getTypeName())
                     .totalSlots(total)
                     .availableSlots(available)

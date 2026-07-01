@@ -51,4 +51,18 @@ public class Reservation {
 
     @Column(name = "CreatedAt")
     private LocalDateTime createdAt;
+
+    // Phơi ID/tên phẳng ra JSON (user & vehicleType bị @JsonIgnore để khỏi lộ
+    // passwordHash / proxy Hibernate). FE đọc trực tiếp các field này.
+    public Long getUserId() {
+        return user != null ? user.getUserId() : null;
+    }
+
+    public Integer getVehicleTypeId() {
+        return vehicleType != null ? vehicleType.getVehicleTypeId() : null;
+    }
+
+    public String getVehicleTypeName() {
+        return vehicleType != null ? vehicleType.getTypeName() : null;
+    }
 }
