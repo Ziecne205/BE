@@ -74,4 +74,14 @@ public class ParkingSession {
 
     @Column(name = "Status")
     private String status; // Admitted, Parked, Moved, Completed, Exception
+
+    /** Staff force-checked-in vehicle (plate mismatch vs reservation, overridden manually). */
+    @Column(name = "IsForceCheckIn", columnDefinition = "BIT DEFAULT 0", nullable = false)
+    @Builder.Default
+    private Boolean isForceCheckIn = false;
+
+    /** Session exceeded the pricing policy grace period at checkout (overstay surcharge applied). */
+    @Column(name = "IsOverstay", columnDefinition = "BIT DEFAULT 0", nullable = false)
+    @Builder.Default
+    private Boolean isOverstay = false;
 }
