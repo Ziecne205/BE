@@ -41,13 +41,22 @@ public class SimulationService {
 
     private static final List<String> OPEN_STATUSES = List.of("Admitted", "Parked", "Moved");
 
-    public SimulationDtos.EntryScanResult entryScan(String plate, double failureRate) {
+    public SimulationDtos.EntryScanResult entryScan(String plate, String reservationIdStr, double failureRate) {
         if (Math.random() * 100 < failureRate) {
             return new SimulationDtos.EntryScanResult(false, null, null, null,
                     "SCAN_FAILED", "Camera doc bien so that bai — nhap tay");
         }
+        
+        Long parsedResId = null;
+        if (reservationIdStr != null && !reservationIdStr.isBlank()) {
+            try {
+                parsedResId = Long.parseLong(reservationIdStr);
+            } catch (NumberFormatException ignored) {}
+        }
+
         CheckInRequest req = new CheckInRequest();
-        req.setLicensePlate(plate);
+        req.setLicensePlate(plate != null ? plate : ""); // Will be validated or overridden by reservation logic in SessionService if needed
+        req.setReservationId(parsedResId);
         req.setVehicleTypeId(defaultVehicleTypeId());
         req.setEntryGateId(entryGate().getGateId());
         try {

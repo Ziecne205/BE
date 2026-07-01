@@ -60,6 +60,7 @@ public class SecurityConfig {
                                 "/api/auth/**",
                                 "/api/driver/parking-info/**",
                                 "/api/driver/parking-info",
+                                "/api/payments/payos/webhook",
                                 "/swagger-ui/**", "/swagger-ui.html",
                                 "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()

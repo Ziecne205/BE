@@ -46,15 +46,32 @@ public class SessionService {
         LocalDateTime now = LocalDateTime.now();
         Reservation reservation = null;
         
-        List<Reservation> activeReservations = reservationRepository
-                .findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
-                        request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now);
+        if (request.getReservationId() != null) {
+            reservation = reservationRepository.findById(request.getReservationId()).orElse(null);
+            if (reservation != null && !OUTSTANDING_RESERVATION_STATUSES.contains(reservation.getStatus())) {
+                reservation = null;
+            }
+        }
 
-        if (!activeReservations.isEmpty()) {
-            reservation = activeReservations.get(0);
+        if (reservation == null && request.getLicensePlate() != null && !request.getLicensePlate().isBlank()) {
+            List<Reservation> activeReservations = reservationRepository
+                    .findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
+                            request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now);
+            if (!activeReservations.isEmpty()) {
+                reservation = activeReservations.get(0);
+            }
+        }
+
+        if (reservation != null) {
+            if (request.getLicensePlate() == null || request.getLicensePlate().isBlank()) {
+                request.setLicensePlate(reservation.getLicensePlate());
+            }
             reservation.setStatus("CheckedIn");
             reservationRepository.save(reservation);
         } else {
+            if (request.getLicensePlate() == null || request.getLicensePlate().isBlank()) {
+                throw new BusinessRuleException("Bien so khong duoc de trong neu khong co ma dat cho");
+            }
             long capacity = slotRepository.countByVehicleType_VehicleTypeIdAndStatusNot(
                     vehicleType.getVehicleTypeId(), "Maintenance");
             long inside = sessionRepository.countByVehicleType_VehicleTypeIdAndStatusIn(

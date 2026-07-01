@@ -1,7 +1,6 @@
 package com.parking.modules.driver;
 
 import com.parking.common.ApiResponse;
-import com.parking.entity.Reservation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,23 +20,30 @@ public class ReservationController {
     private final ReservationService reservationService;
 
     @PostMapping
-    public ApiResponse<Reservation> create(@Valid @RequestBody ReservationRequest request, Authentication auth) {
+    public ApiResponse<ReservationDTO> create(@Valid @RequestBody ReservationRequest request, Authentication auth) {
         return ApiResponse.ok("Tao booking thanh cong, vui long thanh toan coc de xac nhan",
-                reservationService.create(request, auth.getName()));
+                ReservationDTO.from(reservationService.create(request, auth.getName())));
     }
 
     @GetMapping("/my")
-    public ApiResponse<List<Reservation>> myReservations(Authentication auth) {
-        return ApiResponse.ok(reservationService.findMyReservations(auth.getName()));
+    public ApiResponse<List<ReservationDTO>> myReservations(Authentication auth) {
+        return ApiResponse.ok(reservationService.findMyReservations(auth.getName())
+                .stream().map(ReservationDTO::from).toList());
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<Reservation> findById(@PathVariable Long id) {
-        return ApiResponse.ok(reservationService.findById(id));
+    public ApiResponse<ReservationDTO> findById(@PathVariable Long id) {
+        return ApiResponse.ok(ReservationDTO.from(reservationService.findById(id)));
     }
 
     @PatchMapping("/{id}/cancel")
-    public ApiResponse<Reservation> cancel(@PathVariable Long id, Authentication auth) {
-        return ApiResponse.ok("Da huy booking", reservationService.cancel(id, auth.getName()));
+    public ApiResponse<ReservationDTO> cancel(@PathVariable Long id, Authentication auth) {
+        return ApiResponse.ok("Da huy booking", ReservationDTO.from(reservationService.cancel(id, auth.getName())));
+    }
+
+    @PostMapping("/{id}/confirm-deposit")
+    public ApiResponse<ReservationDTO> confirmDeposit(@PathVariable Long id, Authentication auth) {
+        return ApiResponse.ok("Thanh toan coc thanh cong",
+                ReservationDTO.from(reservationService.confirmDeposit(id, auth.getName())));
     }
 }

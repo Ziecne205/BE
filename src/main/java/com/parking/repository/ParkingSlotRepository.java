@@ -25,6 +25,14 @@ public interface ParkingSlotRepository extends JpaRepository<ParkingSlot, Long> 
            "WHERE s.floor.floorId = :floorId")
     List<ParkingSlot> findByFloorIdWithDetails(@Param("floorId") Integer floorId);
 
+    /** Tong + con trong theo tung loai xe trong 1 query (thay cho vong lap 2N count). */
+    @Query("SELECT s.vehicleType.vehicleTypeId AS vehicleTypeId, " +
+           "COUNT(s) AS total, " +
+           "SUM(CASE WHEN s.status = 'Available' THEN 1 ELSE 0 END) AS available " +
+           "FROM ParkingSlot s " +
+           "GROUP BY s.vehicleType.vehicleTypeId")
+    List<SlotCountByType> countSlotsGroupedByVehicleType();
+
     @Query("SELECT s FROM ParkingSlot s " +
            "LEFT JOIN FETCH s.floor f " +
            "LEFT JOIN FETCH f.dedicatedVehicleType " +

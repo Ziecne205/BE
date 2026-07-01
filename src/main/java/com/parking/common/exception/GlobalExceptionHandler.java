@@ -4,6 +4,8 @@ import com.parking.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -23,6 +25,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Object>> handleBusinessRule(BusinessRuleException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.fail(ex.getMessage(), ex.getErrorCode()));
+    }
+
+    /** Sai tai khoan/mat khau (hoac tai khoan chua dang ky). Khong tiet lo ly do cu the. */
+    @ExceptionHandler(BadCredentialsException.class)
+    public ResponseEntity<ApiResponse<Object>> handleBadCredentials(BadCredentialsException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.fail("Tài khoản hoặc mật khẩu không đúng", "INVALID_CREDENTIALS"));
+    }
+
+    /** Tai khoan bi khoa (Status != Active). */
+    @ExceptionHandler(DisabledException.class)
+    public ResponseEntity<ApiResponse<Object>> handleDisabled(DisabledException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.fail("Tài khoản đã bị vô hiệu hóa", "ACCOUNT_DISABLED"));
     }
 
     @ExceptionHandler(AccessDeniedException.class)

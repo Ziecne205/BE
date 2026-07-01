@@ -47,6 +47,11 @@ public class ReservationService {
                 .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(
                         vehicleType.getVehicleTypeId(), "Active")
                 .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
+        if (policy.getBasePrice() == null) {
+            throw new BusinessRuleException(
+                    "Bang gia cho loai xe nay chua duoc cau hinh (thieu gia co ban)",
+                    "PRICING_NOT_CONFIGURED");
+        }
         BigDecimal deposit = policy.getBasePrice().multiply(DEPOSIT_PERCENT);
 
         Reservation reservation = Reservation.builder()
@@ -120,6 +125,24 @@ public class ReservationService {
             throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
         }
         reservation.setStatus("Cancelled");
+        return reservationRepository.save(reservation);
+    }
+
+    /**
+     * Xac nhan da thanh toan tien coc -> depositStatus=Paid, status=Confirmed.
+     * Dung cho ca QR (demo) va Tien mat. Chi chu booking moi duoc thanh toan.
+     */
+    @Transactional
+    public Reservation confirmDeposit(Long id, String username) {
+        Reservation reservation = findById(id);
+        if (!reservation.getUser().getUsername().equals(username)) {
+            throw new BusinessRuleException("Ban khong co quyen thanh toan booking nay");
+        }
+        if (!"Pending".equals(reservation.getStatus())) {
+            throw new BusinessRuleException("Booking khong o trang thai cho thanh toan coc");
+        }
+        reservation.setDepositStatus("Paid");
+        reservation.setStatus("Confirmed");
         return reservationRepository.save(reservation);
     }
 }

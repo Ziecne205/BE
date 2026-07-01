@@ -22,6 +22,9 @@ spring:
       hibernate:
         format_sql: true
     open-in-view: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
 springdoc:
   swagger-ui:
@@ -37,6 +40,8 @@ app:
     expiration-ms: 86400000 # 24h
 
 payos:
-  client-id: ${PAYOS_CLIENT_ID}
-  api-key: ${PAYOS_API_KEY}
-  checksum-key: ${PAYOS_CHECKSUM_KEY}
+  client-id: ${PAYOS_CLIENT_ID:}
+  api-key: ${PAYOS_API_KEY:}
+  checksum-key: ${PAYOS_CHECKSUM_KEY:}
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/driver/my-bookings}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/driver/book}

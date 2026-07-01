@@ -7,7 +7,7 @@ import java.util.List;
 public class SimulationDtos {
 
     // ── requests ────────────────────────────────────────────────────────────────
-    public record ScanRequest(String licensePlate, Double failureRate) {
+    public record ScanRequest(String licensePlate, String reservationId, Double failureRate) {
     }
 
     public record PlateRequest(String licensePlate) {

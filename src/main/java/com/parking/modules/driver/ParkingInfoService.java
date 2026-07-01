@@ -5,6 +5,7 @@ import com.parking.entity.SystemConfig;
 import com.parking.entity.VehicleType;
 import com.parking.repository.ParkingSlotRepository;
 import com.parking.repository.PricingPolicyRepository;
+import com.parking.repository.SlotCountByType;
 import com.parking.repository.SystemConfigRepository;
 import com.parking.repository.VehicleTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.springframework.transaction.annotation.Transactional;
@@ -50,14 +52,19 @@ public class ParkingInfoService {
                 .nightSurcharge(p.getNightSurcharge())
                 .build()).collect(Collectors.toList());
 
-        // 3. Get Availability By Vehicle Type
+        // 3. Get Availability By Vehicle Type — 1 query GROUP BY thay cho vong lap 2N count.
         List<VehicleType> vehicleTypes = vehicleTypeRepository.findAll();
+        Map<Integer, SlotCountByType> countByType = parkingSlotRepository
+                .countSlotsGroupedByVehicleType().stream()
+                .collect(Collectors.toMap(SlotCountByType::getVehicleTypeId, c -> c));
+
         List<SlotAvailabilityDTO> availabilityList = new ArrayList<>();
         long totalAvailableSlots = 0;
 
         for (VehicleType vt : vehicleTypes) {
-            long total = parkingSlotRepository.countByVehicleType_VehicleTypeId(vt.getVehicleTypeId());
-            long available = parkingSlotRepository.countByVehicleType_VehicleTypeIdAndStatus(vt.getVehicleTypeId(), "Available");
+            SlotCountByType c = countByType.get(vt.getVehicleTypeId());
+            long total = c != null ? c.getTotal() : 0;
+            long available = c != null ? c.getAvailable() : 0;
             totalAvailableSlots += available;
 
             availabilityList.add(SlotAvailabilityDTO.builder()

@@ -22,7 +22,7 @@ public class Payment {
     private Long paymentId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "SessionID", nullable = false)
+    @JoinColumn(name = "SessionID")
     @JsonIgnore
     private ParkingSession session;
 

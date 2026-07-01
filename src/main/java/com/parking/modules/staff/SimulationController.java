@@ -26,7 +26,7 @@ public class SimulationController {
     @Operation(summary = "Mo phong quet bien so cong vao (co ty le loi)")
     public ApiResponse<SimulationDtos.EntryScanResult> entryScan(@RequestBody SimulationDtos.ScanRequest req) {
         double fr = req.failureRate() == null ? 0 : req.failureRate();
-        return ApiResponse.ok("Ket qua quet cong vao", simulationService.entryScan(req.licensePlate(), fr));
+        return ApiResponse.ok("Ket qua quet cong vao", simulationService.entryScan(req.licensePlate(), req.reservationId(), fr));
     }
 
     @PostMapping("/gate/exit/scan")

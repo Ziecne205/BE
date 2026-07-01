@@ -19,4 +19,6 @@ public class CheckInRequest {
     private Integer entryGateId;
 
     private String entryImageUrl;
+    
+    private Long reservationId;
 }

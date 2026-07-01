@@ -16,6 +16,16 @@ import org.springframework.web.bind.annotation.*;
 public class PaymentDriverController {
 
     private final PaymentDriverService paymentDriverService;
+    private final PayosService payosService;
+
+    @PostMapping("/payos/create-link")
+    public ApiResponse<PayosLinkResponse> createPayosLink(@RequestBody PayosLinkRequest request, Authentication auth) {
+        if (!"DEPOSIT".equalsIgnoreCase(request.getType())) {
+            return ApiResponse.fail("Hien chi ho tro thanh toan coc (DEPOSIT)");
+        }
+        return ApiResponse.ok("Tao link PayOS thanh cong",
+                payosService.createDepositLink(request.getId(), auth.getName()));
+    }
 
     @PostMapping("/checkout")
     public ApiResponse<String> checkout(@RequestBody PaymentRequest request, Authentication auth) {

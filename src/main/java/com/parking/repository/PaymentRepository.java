@@ -17,4 +17,6 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
     BigDecimal sumRevenueByPeriod(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     List<Payment> findBySession_SessionId(Long sessionId);
+
+    java.util.Optional<Payment> findFirstByTransactionReference(String transactionReference);
 }
