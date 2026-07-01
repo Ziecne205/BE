@@ -1,5 +1,7 @@
 package com.parking.modules.driver;
 
+import com.parking.common.exception.BusinessRuleException;
+import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.PricingService;
 import com.parking.entity.ParkingSession;
 import com.parking.entity.Payment;
@@ -29,18 +31,18 @@ public class SessionDriverService {
 
     public List<ParkingSessionDTO> getCurrentSessions(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         List<String> activeStatuses = Arrays.asList("Admitted", "Parked", "Moved");
-        List<ParkingSession> sessions = sessionRepository.findByDriver_UserIdAndStatusIn(user.getUserId(), activeStatuses);
+        List<ParkingSession> sessions = sessionRepository.findByDriver_UserIdAndStatusIn(
+                user.getUserId(), activeStatuses);
 
         return sessions.stream().map(session -> {
             BigDecimal estimatedFee = pricingService.calculateFee(
                     session.getVehicleType().getVehicleTypeId(),
                     session.getEntryTime(),
-                    null
+                    null   // null → uses now(), correct for in-progress sessions
             );
-
             return ParkingSessionDTO.builder()
                     .sessionId(session.getSessionId())
                     .licensePlateIn(session.getLicensePlateIn())
@@ -56,18 +58,23 @@ public class SessionDriverService {
 
     public List<ParkingSessionDTO> getHistorySessions(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         List<String> historyStatuses = Arrays.asList("Completed", "Exception");
-        List<ParkingSession> sessions = sessionRepository.findByDriver_UserIdAndStatusIn(user.getUserId(), historyStatuses);
+        List<ParkingSession> sessions = sessionRepository.findByDriver_UserIdAndStatusIn(
+                user.getUserId(), historyStatuses);
 
         return sessions.stream().map(session -> {
-            BigDecimal fee = pricingService.calculateFee(
-                    session.getVehicleType().getVehicleTypeId(),
-                    session.getEntryTime(),
-                    session.getExitTime()
-            );
-
+            // Exception sessions with no exitTime have no meaningful fee to show.
+            // Passing null would fall back to "now" and produce a nonsensical
+            // ever-growing number, so we return null instead.
+            BigDecimal fee = null;
+            if (!("Exception".equals(session.getStatus()) && session.getExitTime() == null)) {
+                fee = pricingService.calculateFee(
+                        session.getVehicleType().getVehicleTypeId(),
+                        session.getEntryTime(),
+                        session.getExitTime());
+            }
             return ParkingSessionDTO.builder()
                     .sessionId(session.getSessionId())
                     .licensePlateIn(session.getLicensePlateIn())
@@ -83,20 +90,24 @@ public class SessionDriverService {
 
     public SessionDetailResponse getSessionDetail(Long sessionId, String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         ParkingSession session = sessionRepository.findById(sessionId)
-                .orElseThrow(() -> new RuntimeException("Session not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
 
-        if (session.getDriver() == null || !session.getDriver().getUserId().equals(user.getUserId())) {
-            throw new RuntimeException("Access denied");
+        if (session.getDriver() == null
+                || !session.getDriver().getUserId().equals(user.getUserId())) {
+            throw new BusinessRuleException("Ban khong co quyen xem phien nay");
         }
 
-        BigDecimal totalFee = pricingService.calculateFee(
-                session.getVehicleType().getVehicleTypeId(),
-                session.getEntryTime(),
-                session.getExitTime()
-        );
+        // Same null-fee rule as history: Exception + no exitTime → null
+        BigDecimal totalFee = null;
+        if (!("Exception".equals(session.getStatus()) && session.getExitTime() == null)) {
+            totalFee = pricingService.calculateFee(
+                    session.getVehicleType().getVehicleTypeId(),
+                    session.getEntryTime(),
+                    session.getExitTime());
+        }
 
         SessionDetailResponse.SessionDetailResponseBuilder builder = SessionDetailResponse.builder()
                 .sessionId(session.getSessionId())
@@ -112,12 +123,16 @@ public class SessionDriverService {
                 .exitGateName(session.getExitGate() != null ? session.getExitGate().getGateName() : null)
                 .totalFee(totalFee);
 
-        // Fetch payment
-        paymentRepository.findBySession_SessionId(sessionId).stream().findFirst().ifPresent(payment -> {
-            builder.paymentStatus(payment.getPaymentStatus())
-                   .paymentMethod(payment.getPaymentMethod())
-                   .paymentTime(payment.getPaymentTime());
-        });
+        // Pick the most recent successful payment; fall back to any payment if none succeeded
+        List<Payment> payments = paymentRepository.findBySession_SessionId(sessionId);
+        payments.stream()
+                .filter(p -> "Success".equals(p.getPaymentStatus()))
+                .findFirst()
+                .or(() -> payments.stream().findFirst())
+                .ifPresent(payment -> builder
+                        .paymentStatus(payment.getPaymentStatus())
+                        .paymentMethod(payment.getPaymentMethod())
+                        .paymentTime(payment.getPaymentTime()));
 
         return builder.build();
     }
