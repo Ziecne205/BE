@@ -124,7 +124,24 @@ public class ReservationService {
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
         }
-        reservation.setStatus("Cancelled");
+        return cancelWithRefund(reservation, "Cancelled", true);
+    }
+
+    /**
+     * Huy booking + xu ly coc (hoan tien hoac mat coc). Dung chung boi:
+     * - Driver huy chu dong (refund=true, status=Cancelled) qua {@link #cancel(Long, String)}.
+     * - Scheduler no-show (refund=false/forfeit, status=Expired).
+     * - Manager cascade khi o bao tri lam mat suc chua (refund=true, status=Cancelled).
+     * Khong co cong thanh toan hoan tien tu dong that (PayOS hoan coc la thu cong theo ghi chu
+     * nghiep vu) nen o day chi cap nhat depositStatus de phan anh ket qua tai chinh; doi tac
+     * thanh toan xu ly hoan tien thuc te ngoai luong nay.
+     */
+    @Transactional
+    public Reservation cancelWithRefund(Reservation reservation, String newStatus, boolean refund) {
+        reservation.setStatus(newStatus);
+        if ("Paid".equals(reservation.getDepositStatus())) {
+            reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
+        }
         return reservationRepository.save(reservation);
     }
 

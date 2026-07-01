@@ -19,4 +19,7 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
     long countByStatusIn(List<String> statuses);
     List<ParkingSession> findByEntryTimeBetween(LocalDateTime from, LocalDateTime to);
     List<ParkingSession> findByStatusAndEntryTimeBetween(String status, LocalDateTime from, LocalDateTime to);
+
+    /** Phien "Admitted" qua lau khong co tien trien (chua duoc ghi o thuc te / check-out) -> nghi van bo xe/loiterer. */
+    List<ParkingSession> findByStatusAndEntryTimeBefore(String status, LocalDateTime threshold);
 }
