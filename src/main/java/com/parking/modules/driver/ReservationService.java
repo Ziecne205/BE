@@ -4,6 +4,7 @@ import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.entity.*;
 import com.parking.repository.*;
+import com.parking.modules.manager.FeeConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,14 +22,13 @@ import java.util.List;
 @SuppressWarnings("null")
 public class ReservationService {
 
-    private static final BigDecimal DEPOSIT_PERCENT = BigDecimal.valueOf(0.20); // coc 20% gia co ban (muc 8.2)
-
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
     private final ParkingSlotRepository slotRepository;
     private final BookingQuotaRepository bookingQuotaRepository;
     private final PricingPolicyRepository pricingPolicyRepository;
+    private final FeeConfigService feeConfigService;
 
     @Transactional
     public Reservation create(ReservationRequest request, String username) {
@@ -52,7 +52,8 @@ public class ReservationService {
                     "Bang gia cho loai xe nay chua duoc cau hinh (thieu gia co ban)",
                     "PRICING_NOT_CONFIGURED");
         }
-        BigDecimal deposit = policy.getBasePrice().multiply(DEPOSIT_PERCENT);
+        BigDecimal depositPercent = feeConfigService.getFeeConfig().getDepositPercent();
+        BigDecimal deposit = policy.getBasePrice().multiply(depositPercent);
 
         Reservation reservation = Reservation.builder()
                 .user(user)

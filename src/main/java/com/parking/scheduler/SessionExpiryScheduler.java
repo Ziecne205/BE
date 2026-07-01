@@ -5,6 +5,7 @@ import com.parking.entity.ParkingSession;
 import com.parking.entity.Reservation;
 import com.parking.entity.User;
 import com.parking.modules.driver.ReservationService;
+import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.IncidentReportRepository;
 import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.ReservationRepository;
@@ -52,6 +53,7 @@ public class SessionExpiryScheduler {
     private final IncidentReportRepository incidentReportRepository;
     private final UserRepository userRepository;
     private final ReservationService reservationService;
+    private final FeeConfigService feeConfigService;
 
     /**
      * Moi 5 phut: phien "Admitted" qua 15 phut ma chua duoc ghi o thuc te (Parked) hay check-out
@@ -100,8 +102,11 @@ public class SessionExpiryScheduler {
     @Scheduled(fixedDelay = 15 * 60 * 1000)
     public void expireNoShowReservations() {
         LocalDateTime now = LocalDateTime.now();
+        int graceMinutes = feeConfigService.getFeeConfig().getNoShowGraceMinutes();
+        LocalDateTime cutoffTime = now.minusMinutes(graceMinutes);
+
         List<Reservation> noShowReservations = reservationRepository
-                .findByStatusInAndExpectedExitTimeBefore(List.of("Pending", "Confirmed"), now);
+                .findByStatusInAndExpectedExitTimeBefore(List.of("Pending", "Confirmed"), cutoffTime);
         for (Reservation reservation : noShowReservations) {
             reservationService.cancelWithRefund(reservation, "Expired", false);
             log.warn("Reservation {} marked Expired (no-show) and deposit forfeited", reservation.getReservationId());
