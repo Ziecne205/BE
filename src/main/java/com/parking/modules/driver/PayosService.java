@@ -43,9 +43,9 @@ public class PayosService {
     private String apiKey;
     @Value("${payos.checksum-key:}")
     private String checksumKey;
-    @Value("${payos.return-url:http://localhost:3000/driver/my-bookings}")
+    @Value("${payos.return-url:http://localhost:3000/driver/payment/return}")
     private String returnUrl;
-    @Value("${payos.cancel-url:http://localhost:3000/driver/book}")
+    @Value("${payos.cancel-url:http://localhost:3000/driver/payment/return?cancel=true}")
     private String cancelUrl;
 
     private final ReservationRepository reservationRepository;
@@ -70,7 +70,7 @@ public class PayosService {
         if (amount < 1000) {
             amount = 2000; // PayOS yeu cau so tien toi thieu
         }
-        long orderCode = Long.parseLong(String.format("%d%06d", reservationId, System.currentTimeMillis() % 1000000));
+        long orderCode = buildOrderCode(reservationId);
         String description = truncate("Coc " + r.getLicensePlate(), 25);
 
         PayosLinkResponse resp = callCreatePaymentLink(orderCode, amount, description);
@@ -190,6 +190,25 @@ public class PayosService {
         } catch (Exception e) {
             throw new IllegalStateException("Loi tinh HMAC", e);
         }
+    }
+
+    /**
+     * Build a unique orderCode that stays within JS Number.MAX_SAFE_INTEGER (< 10^15).
+     * Formula: (reservationId % 10^8) * 10^6 + (currentTimeMillis % 10^6)
+     * Max value: 99_999_999 * 1_000_000 + 999_999 = 99_999_999_999_999 < 9_007_199_254_740_991.
+     * Retries up to 5 times if a collision is found in the Payment table.
+     */
+    private long buildOrderCode(Long reservationId) {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            long code = (reservationId % 100_000_000L) * 1_000_000L
+                    + (System.currentTimeMillis() % 1_000_000L);
+            if (paymentRepository.findFirstByTransactionReference(String.valueOf(code)).isEmpty()) {
+                return code;
+            }
+            // Brief pause to shift the ms suffix before retrying
+            try { Thread.sleep(1); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+        }
+        throw new BusinessRuleException("Khong the tao ma giao dich duy nhat, vui long thu lai", "ORDER_CODE_CONFLICT");
     }
 
     private String truncate(String s, int max) {

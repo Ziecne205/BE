@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +22,7 @@ public class FeedbackDriverController {
     private final FeedbackDriverService feedbackDriverService;
 
     @PostMapping
-    public ApiResponse<Feedback> submitFeedback(@RequestBody FeedbackRequest request, Authentication auth) {
+    public ApiResponse<Feedback> submitFeedback(@Valid @RequestBody FeedbackRequest request, Authentication auth) {
         return ApiResponse.ok("Cam on ban da danh gia", feedbackDriverService.submitFeedback(request, auth.getName()));
     }
 }
