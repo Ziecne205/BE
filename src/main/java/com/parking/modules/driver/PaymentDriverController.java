@@ -33,7 +33,7 @@ public class PaymentDriverController {
     }
 
     @PostMapping("/mock-callback")
-    public ApiResponse<Payment> mockCallback(@RequestParam String txnRef, @RequestParam Long sessionId, @RequestParam String status) {
-        return ApiResponse.ok("Cap nhat thanh toan thanh cong", paymentDriverService.processMockCallback(txnRef, sessionId, status));
+    public ApiResponse<Payment> mockCallback(@RequestParam String txnRef, @RequestParam Long sessionId, @RequestParam String status, Authentication auth) {
+        return ApiResponse.ok("Cap nhat thanh toan thanh cong", paymentDriverService.processMockCallback(txnRef, sessionId, status, auth.getName()));
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -104,15 +105,31 @@ public class ReservationService {
         return reservationRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
     public List<Reservation> findMyReservations(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
         return reservationRepository.findByUser_UserId(user.getUserId());
     }
 
+    @Transactional(readOnly = true)
     public Reservation findById(Long id) {
         return reservationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+    }
+
+    /**
+     * Lay thong tin booking theo ID, kiem tra quyen truy cap.
+     * Phai chay trong transaction de truy cap cac association lazy (user, vehicleType).
+     */
+    @Transactional(readOnly = true)
+    public ReservationDTO findByIdAsDto(Long id, String username, boolean isPrivileged) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+        if (!isPrivileged && !reservation.getUser().getUsername().equals(username)) {
+            throw new BusinessRuleException("Ban khong co quyen xem booking nay");
+        }
+        return ReservationDTO.from(reservation);
     }
 
     @Transactional
@@ -142,6 +159,19 @@ public class ReservationService {
         if ("Paid".equals(reservation.getDepositStatus())) {
             reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
         }
+        // Enforce 3-hour cancellation window
+        long hoursUntilEntry = ChronoUnit.HOURS.between(
+                LocalDateTime.now(), reservation.getExpectedEntryTime());
+        if (hoursUntilEntry < 3) {
+            throw new BusinessRuleException(
+                    "Khong the huy booking trong vong 3 gio truoc gio vao",
+                    "CANCEL_TOO_LATE");
+        }
+        // Refund deposit if it was already paid
+        if ("Paid".equals(reservation.getDepositStatus())) {
+            reservation.setDepositStatus("Refunded");
+        }
+        reservation.setStatus("Cancelled");
         return reservationRepository.save(reservation);
     }
 

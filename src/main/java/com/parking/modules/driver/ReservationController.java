@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/driver/reservations")
@@ -27,13 +28,16 @@ public class ReservationController {
 
     @GetMapping("/my")
     public ApiResponse<List<ReservationDTO>> myReservations(Authentication auth) {
-        return ApiResponse.ok(reservationService.findMyReservations(auth.getName())
+        return ApiResponse.ok("Danh sach dat cho", reservationService.findMyReservations(auth.getName())
                 .stream().map(ReservationDTO::from).toList());
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ReservationDTO> findById(@PathVariable Long id) {
-        return ApiResponse.ok(ReservationDTO.from(reservationService.findById(id)));
+    public ApiResponse<ReservationDTO> findById(@PathVariable Long id, Authentication auth) {
+        boolean isPrivileged = auth.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_MANAGER")
+                            || a.getAuthority().equals("ROLE_ADMIN"));
+        return ApiResponse.ok(reservationService.findByIdAsDto(id, auth.getName(), isPrivileged));
     }
 
     @PatchMapping("/{id}/cancel")
@@ -42,8 +46,8 @@ public class ReservationController {
     }
 
     @PostMapping("/{id}/confirm-deposit")
-    public ApiResponse<ReservationDTO> confirmDeposit(@PathVariable Long id, Authentication auth) {
-        return ApiResponse.ok("Thanh toan coc thanh cong",
-                ReservationDTO.from(reservationService.confirmDeposit(id, auth.getName())));
+    public ApiResponse<Map<String, Boolean>> confirmDeposit(@PathVariable Long id, Authentication auth) {
+        reservationService.confirmDeposit(id, auth.getName());
+        return ApiResponse.ok("Thanh toan coc thanh cong", Map.of("success", true));
     }
 }
