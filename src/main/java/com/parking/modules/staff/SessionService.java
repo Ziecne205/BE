@@ -22,6 +22,13 @@ public class SessionService {
     private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");
     private static final List<String> OUTSTANDING_RESERVATION_STATUSES = List.of("Confirmed");
 
+    /**
+     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay). PricingPolicy chua co
+     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la qua han).
+     * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai bai gui theo thang).
+     */
+    private static final int OVERSTAY_GRACE_HOURS = 24;
+
     private final ParkingSessionRepository sessionRepository;
     private final ParkingSlotRepository slotRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
@@ -119,6 +126,55 @@ public class SessionService {
                 .entryTime(session.getEntryTime())
                 .suggestedSlotCode(suggestedSlot != null ? suggestedSlot.getSlotCode() : null)
                 .isReserved(reservation != null)
+                .isForceCheckIn(false)
+                .build();
+    }
+
+    /**
+     * Cho vao thu cong khi bien so quet duoc tai cong khong khop voi booking/phien hien tai.
+     * Cap nhat lai bien so thuc te tren phien, danh dau isForceCheckIn=true va ghi audit log
+     * (cung pattern voi STAFF_CHECK_IN/STAFF_CHECK_OUT).
+     */
+    @Transactional
+    public CheckInResponse forceCheckIn(Long sessionId, ForceCheckInRequest request) {
+        ParkingSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien gui xe #" + sessionId));
+
+        if (!OPEN_SESSION_STATUSES.contains(session.getStatus())) {
+            throw new BusinessRuleException("Chi co the force check-in phien dang mo (Admitted/Parked)");
+        }
+
+        String previousPlate = session.getLicensePlateIn();
+        session.setLicensePlateIn(request.getActualPlate());
+        session.setIsForceCheckIn(true);
+
+        if (session.getReservation() != null) {
+            session.getReservation().setLicensePlate(request.getActualPlate());
+            reservationRepository.save(session.getReservation());
+        }
+
+        session = sessionRepository.save(session);
+
+        LocalDateTime now = LocalDateTime.now();
+        AuditLog log = AuditLog.builder()
+                .action("STAFF_FORCE_CHECK_IN")
+                .entityName("ParkingSession")
+                .entityId(String.valueOf(session.getSessionId()))
+                .detail("Staff force checked-in vehicle: plate changed from " + previousPlate
+                        + " to " + request.getActualPlate()
+                        + (request.getReason() != null && !request.getReason().isBlank()
+                                ? " | reason: " + request.getReason() : ""))
+                .createdAt(now)
+                .build();
+        auditLogRepository.save(log);
+
+        return CheckInResponse.builder()
+                .sessionId(session.getSessionId())
+                .licensePlateIn(session.getLicensePlateIn())
+                .entryTime(session.getEntryTime())
+                .suggestedSlotCode(session.getSuggestedSlot() != null ? session.getSuggestedSlot().getSlotCode() : null)
+                .isReserved(session.getReservation() != null)
+                .isForceCheckIn(true)
                 .build();
     }
 
@@ -139,7 +195,9 @@ public class SessionService {
                 .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
 
         boolean lostTicket = request.isLostTicket();
-        BigDecimal amount = calculateAmount(policy, minutes, lostTicket);
+        long hours = (long) Math.ceil(minutes / 60.0);
+        boolean overstay = hours > OVERSTAY_GRACE_HOURS;
+        BigDecimal amount = calculateAmount(policy, minutes, lostTicket, overstay);
         BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
                 ? policy.getLostTicketFee() : BigDecimal.ZERO;
 
@@ -150,6 +208,7 @@ public class SessionService {
         session.setExitGate(exitGate);
         session.setExitTime(exitTime);
         session.setStatus("Completed");
+        session.setIsOverstay(overstay);
         sessionRepository.save(session);
 
         if (session.getReservation() != null) {
@@ -217,6 +276,7 @@ public class SessionService {
                 .exitGateName(exitGate.getGateName())
                 .slotFreed(slotFreed)
                 .cardReturned(cardReturned)
+                .isOverstay(overstay)
                 .build();
     }
 
@@ -249,7 +309,7 @@ public class SessionService {
                 .build();
     }
 
-    private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket) {
+    private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket, boolean overstay) {
         long hours = (long) Math.ceil(minutes / 60.0);
         BigDecimal amount;
         if (hours <= policy.getBaseHours()) {
@@ -260,6 +320,12 @@ public class SessionService {
         }
         if (lostTicket && policy.getLostTicketFee() != null) {
             amount = amount.add(policy.getLostTicketFee());
+        }
+        if (overstay) {
+            // Phu phi qua han: tinh them extraHourPrice cho moi gio vuot qua gia han (muc don gian,
+            // giu cung don vi/quy uoc voi phi gio them hien co).
+            long overstayHours = hours - OVERSTAY_GRACE_HOURS;
+            amount = amount.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(overstayHours)));
         }
         return amount;
     }

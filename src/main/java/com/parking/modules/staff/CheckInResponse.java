@@ -19,4 +19,5 @@ public class CheckInResponse {
     private LocalDateTime entryTime;
     private String suggestedSlotCode;
     private boolean isReserved;
+    private boolean isForceCheckIn;
 }

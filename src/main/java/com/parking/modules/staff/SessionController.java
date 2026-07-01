@@ -42,4 +42,11 @@ public class SessionController {
     public ApiResponse<ActiveSessionDto> searchByPlate(@RequestParam String licensePlate) {
         return ApiResponse.ok("Tim thay phien", sessionService.searchActiveByPlate(licensePlate));
     }
+
+    @PostMapping("/{id}/force-check-in")
+    @Operation(summary = "Cho vao thu cong khi bien so quet duoc khong khop voi booking (danh dau isForceCheckIn + ghi audit log)")
+    public ApiResponse<CheckInResponse> forceCheckIn(@PathVariable Long id,
+                                                      @Valid @RequestBody ForceCheckInRequest request) {
+        return ApiResponse.ok("Da force check-in", sessionService.forceCheckIn(id, request));
+    }
 }

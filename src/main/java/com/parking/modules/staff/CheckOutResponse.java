@@ -26,4 +26,5 @@ public class CheckOutResponse {
     private String exitGateName;
     private String slotFreed;
     private boolean cardReturned;
+    private boolean isOverstay;
 }
