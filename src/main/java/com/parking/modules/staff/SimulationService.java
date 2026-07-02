@@ -22,14 +22,15 @@ import java.util.List;
 
 /**
  * Cong cu Mo phong Cong & Camera (Staff demo). Anh xa sang nghiep vu that:
- * - entry/exit scan -> check-in / xem phi (khong dong phien; thanh toan qua man exit-payment)
+ * - entry/exit scan -> check-in / xem phi (khong dong phien; thanh toan qua man
+ * exit-payment)
  * - force-checkin -> cho vao thu cong bo qua kiem tra suc chua
- * - camera slot-occupied/vacated -> camera CV cap nhat trang thai o thuc te (scope v3.1)
+ * - camera slot-occupied/vacated -> camera CV cap nhat trang thai o thuc te
+ * (scope v3.1)
  */
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class SimulationService {
 
     private final SessionService sessionService;
@@ -46,16 +47,18 @@ public class SimulationService {
             return new SimulationDtos.EntryScanResult(false, null, null, null,
                     "SCAN_FAILED", "Camera doc bien so that bai — nhap tay");
         }
-        
+
         Long parsedResId = null;
         if (reservationIdStr != null && !reservationIdStr.isBlank()) {
             try {
                 parsedResId = Long.parseLong(reservationIdStr);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
 
         CheckInRequest req = new CheckInRequest();
-        req.setLicensePlate(plate != null ? plate : ""); // Will be validated or overridden by reservation logic in SessionService if needed
+        req.setLicensePlate(plate != null ? plate : ""); // Will be validated or overridden by reservation logic in
+                                                         // SessionService if needed
         req.setReservationId(parsedResId);
         req.setVehicleTypeId(defaultVehicleTypeId());
         req.setEntryGateId(entryGate().getGateId());
@@ -142,7 +145,8 @@ public class SimulationService {
 
     private Gate entryGate() {
         List<Gate> entry = gateRepository.findByGateType("Entry");
-        if (!entry.isEmpty()) return entry.get(0);
+        if (!entry.isEmpty())
+            return entry.get(0);
         return gateRepository.findAll().stream().findFirst()
                 .orElseThrow(() -> new BusinessRuleException("Chua cau hinh cong nao"));
     }

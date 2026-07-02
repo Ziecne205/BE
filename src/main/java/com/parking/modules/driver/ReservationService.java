@@ -18,7 +18,6 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class ReservationService {
 
     private static final BigDecimal DEPOSIT_PERCENT = BigDecimal.valueOf(0.20); // coc 20% gia co ban (muc 8.2)

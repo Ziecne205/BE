@@ -12,12 +12,12 @@ import java.util.List;
 
 /**
  * Vi du CRUD cho phan he Quan tri vien (Admin) - User Management.
- * RBAC (Permissions/RolePermissions), AuditLog, SystemConfig lam theo cung pattern nay.
+ * RBAC (Permissions/RolePermissions), AuditLog, SystemConfig lam theo cung
+ * pattern nay.
  */
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class UserAdminService {
 
     private final UserRepository userRepository;

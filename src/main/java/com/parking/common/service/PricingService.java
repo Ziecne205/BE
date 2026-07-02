@@ -12,7 +12,6 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
-@SuppressWarnings("null")
 public class PricingService {
 
     @Autowired
@@ -26,11 +25,13 @@ public class PricingService {
             exitTime = LocalDateTime.now();
         }
 
-        PricingPolicy policy = pricingPolicyRepository.findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(vehicleTypeId, "Active")
+        PricingPolicy policy = pricingPolicyRepository
+                .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(vehicleTypeId, "Active")
                 .orElseThrow(() -> new RuntimeException("No active pricing policy found for vehicle type"));
 
         long minutes = Duration.between(entryTime, exitTime).toMinutes();
-        if (minutes <= 0) return BigDecimal.ZERO;
+        if (minutes <= 0)
+            return BigDecimal.ZERO;
 
         long totalHours = (long) Math.ceil((double) minutes / 60);
 
@@ -44,12 +45,14 @@ public class PricingService {
         // Night surcharge check (simplistic overlap check)
         int dayStartHour = 6;
         int dayEndHour = 18;
-        
+
         SystemConfig dayStartConfig = systemConfigRepository.findById("DAY_START_HOUR").orElse(null);
         SystemConfig dayEndConfig = systemConfigRepository.findById("DAY_END_HOUR").orElse(null);
-        
-        if (dayStartConfig != null) dayStartHour = Integer.parseInt(dayStartConfig.getConfigValue());
-        if (dayEndConfig != null) dayEndHour = Integer.parseInt(dayEndConfig.getConfigValue());
+
+        if (dayStartConfig != null)
+            dayStartHour = Integer.parseInt(dayStartConfig.getConfigValue());
+        if (dayEndConfig != null)
+            dayEndHour = Integer.parseInt(dayEndConfig.getConfigValue());
 
         boolean hasNightHours = checkNightOverlap(entryTime, exitTime, dayStartHour, dayEndHour);
         if (hasNightHours && policy.getNightSurcharge() != null) {

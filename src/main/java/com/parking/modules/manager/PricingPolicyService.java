@@ -19,7 +19,6 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class PricingPolicyService {
 
     private final PricingPolicyRepository pricingPolicyRepository;
@@ -41,7 +40,8 @@ public class PricingPolicyService {
     @Transactional
     public PricingPolicy create(PricingPolicyRequest request) {
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         // Expired tat ca chinh sach cu cung loai xe
         List<PricingPolicy> oldPolicies = pricingPolicyRepository
@@ -66,7 +66,8 @@ public class PricingPolicyService {
     public PricingPolicy update(Integer id, PricingPolicyRequest request) {
         PricingPolicy policy = findById(id);
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         policy.setVehicleType(vt);
         policy.setBasePrice(request.getBasePrice());

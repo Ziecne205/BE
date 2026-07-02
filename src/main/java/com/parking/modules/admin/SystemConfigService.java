@@ -12,7 +12,6 @@ import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class SystemConfigService {
 
     private final SystemConfigRepository systemConfigRepository;

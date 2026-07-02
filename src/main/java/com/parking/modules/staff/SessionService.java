@@ -16,16 +16,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class SessionService {
 
     private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");
     private static final List<String> OUTSTANDING_RESERVATION_STATUSES = List.of("Confirmed");
 
     /**
-     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay). PricingPolicy chua co
-     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la qua han).
-     * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai bai gui theo thang).
+     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay).
+     * PricingPolicy chua co
+     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la
+     * qua han).
+     * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai
+     * bai gui theo thang).
      */
     private static final int OVERSTAY_GRACE_HOURS = 24;
 
@@ -40,8 +42,10 @@ public class SessionService {
     private final AuditLogRepository auditLogRepository;
 
     /**
-     * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
-     * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc vao.
+     * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) -
+     * Outstanding(t).
+     * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc
+     * vao.
      */
     @Transactional
     public CheckInResponse checkIn(CheckInRequest request) {
@@ -52,7 +56,7 @@ public class SessionService {
 
         LocalDateTime now = LocalDateTime.now();
         Reservation reservation = null;
-        
+
         if (request.getReservationId() != null) {
             reservation = reservationRepository.findById(request.getReservationId()).orElse(null);
             if (reservation != null && !OUTSTANDING_RESERVATION_STATUSES.contains(reservation.getStatus())) {
@@ -63,7 +67,8 @@ public class SessionService {
         if (reservation == null && request.getLicensePlate() != null && !request.getLicensePlate().isBlank()) {
             List<Reservation> activeReservations = reservationRepository
                     .findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
-                            request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now);
+                            request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES,
+                            now);
             if (!activeReservations.isEmpty()) {
                 reservation = activeReservations.get(0);
             }
@@ -115,7 +120,8 @@ public class SessionService {
                 .action("STAFF_CHECK_IN")
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
-                .detail("Staff checked in vehicle: " + request.getLicensePlate() + (reservation != null ? " with booking" : " as walk-in"))
+                .detail("Staff checked in vehicle: " + request.getLicensePlate()
+                        + (reservation != null ? " with booking" : " as walk-in"))
                 .createdAt(now)
                 .build();
         auditLogRepository.save(log);
@@ -131,8 +137,10 @@ public class SessionService {
     }
 
     /**
-     * Cho vao thu cong khi bien so quet duoc tai cong khong khop voi booking/phien hien tai.
-     * Cap nhat lai bien so thuc te tren phien, danh dau isForceCheckIn=true va ghi audit log
+     * Cho vao thu cong khi bien so quet duoc tai cong khong khop voi booking/phien
+     * hien tai.
+     * Cap nhat lai bien so thuc te tren phien, danh dau isForceCheckIn=true va ghi
+     * audit log
      * (cung pattern voi STAFF_CHECK_IN/STAFF_CHECK_OUT).
      */
     @Transactional
@@ -163,7 +171,8 @@ public class SessionService {
                 .detail("Staff force checked-in vehicle: plate changed from " + previousPlate
                         + " to " + request.getActualPlate()
                         + (request.getReason() != null && !request.getReason().isBlank()
-                                ? " | reason: " + request.getReason() : ""))
+                                ? " | reason: " + request.getReason()
+                                : ""))
                 .createdAt(now)
                 .build();
         auditLogRepository.save(log);
@@ -199,7 +208,8 @@ public class SessionService {
         boolean overstay = hours > OVERSTAY_GRACE_HOURS;
         BigDecimal amount = calculateAmount(policy, minutes, lostTicket, overstay);
         BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
-                ? policy.getLostTicketFee() : BigDecimal.ZERO;
+                ? policy.getLostTicketFee()
+                : BigDecimal.ZERO;
 
         boolean plateMismatch = !session.getLicensePlateIn().equalsIgnoreCase(request.getLicensePlate());
 
@@ -289,7 +299,8 @@ public class SessionService {
     public ActiveSessionDto searchActiveByPlate(String licensePlate) {
         ParkingSession session = sessionRepository
                 .findFirstByLicensePlateInAndStatusIn(licensePlate, OPEN_SESSION_STATUSES)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so: " + licensePlate));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Khong tim thay phien dang mo cho bien so: " + licensePlate));
         return toActiveSessionDto(session, LocalDateTime.now());
     }
 
@@ -322,7 +333,8 @@ public class SessionService {
             amount = amount.add(policy.getLostTicketFee());
         }
         if (overstay) {
-            // Phu phi qua han: tinh them extraHourPrice cho moi gio vuot qua gia han (muc don gian,
+            // Phu phi qua han: tinh them extraHourPrice cho moi gio vuot qua gia han (muc
+            // don gian,
             // giu cung don vi/quy uoc voi phi gio them hien co).
             long overstayHours = hours - OVERSTAY_GRACE_HOURS;
             amount = amount.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(overstayHours)));

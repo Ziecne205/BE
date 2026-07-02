@@ -16,7 +16,6 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class ProfileService {
 
     private final UserRepository userRepository;

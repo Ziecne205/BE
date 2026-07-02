@@ -20,13 +20,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Tong quan toan he thong cho Admin: KPI tong, trang thai tung tang, duong cong su dung theo gio.
- * Tai chinh/su co khong gan theo tang (schema khong ho tro) -> de o phan Totals.
+ * Tong quan toan he thong cho Admin: KPI tong, trang thai tung tang, duong cong
+ * su dung theo gio.
+ * Tai chinh/su co khong gan theo tang (schema khong ho tro) -> de o phan
+ * Totals.
  */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@SuppressWarnings("null")
 public class AdminDashboardService {
 
     private final DashboardService dashboardService;
@@ -63,7 +64,8 @@ public class AdminDashboardService {
                 .countByStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
                         OUTSTANDING_STATUSES, now, now);
         BigDecimal revenueToday = paymentRepository.sumRevenueByPeriod(startOfDay, now);
-        if (revenueToday == null) revenueToday = BigDecimal.ZERO;
+        if (revenueToday == null)
+            revenueToday = BigDecimal.ZERO;
 
         long usableTotal = overview.getAvailableSlots() + overview.getOccupiedSlots();
         AdminDashboardResponse.Totals totals = new AdminDashboardResponse.Totals(
@@ -78,7 +80,9 @@ public class AdminDashboardService {
         return new AdminDashboardResponse(floors, totals, buildUsageCurve(startOfDay, now, usableTotal));
     }
 
-    /** Ty le lap day tai moc 2h trong ngay hom nay (dua tren phien vao/ra thuc te). */
+    /**
+     * Ty le lap day tai moc 2h trong ngay hom nay (dua tren phien vao/ra thuc te).
+     */
     private List<AdminDashboardResponse.UsagePoint> buildUsageCurve(
             LocalDateTime startOfDay, LocalDateTime now, long capacity) {
         // Gop phien dang mo + phien vao trong hom nay (dedup theo id).

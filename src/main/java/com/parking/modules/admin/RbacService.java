@@ -16,7 +16,6 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class RbacService {
 
     private final RoleRepository roleRepository;

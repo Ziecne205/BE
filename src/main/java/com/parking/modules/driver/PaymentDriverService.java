@@ -18,7 +18,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class PaymentDriverService {
 
     private final ParkingSessionRepository sessionRepository;
@@ -37,20 +36,23 @@ public class PaymentDriverService {
             throw new RuntimeException("Access denied");
         }
 
-        if (!"Moved".equals(session.getStatus()) && !"Admitted".equals(session.getStatus()) && !"Parked".equals(session.getStatus())) {
+        if (!"Moved".equals(session.getStatus()) && !"Admitted".equals(session.getStatus())
+                && !"Parked".equals(session.getStatus())) {
             throw new RuntimeException("Cannot pay for session in status: " + session.getStatus());
         }
 
         // Return a mock URL
         String mockTxnRef = "MOCK_" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        return "https://mock-payment-gateway.com/pay?txnRef=" + mockTxnRef + "&amount=" + request.getAmount() + "&sessionId=" + request.getSessionId();
+        return "https://mock-payment-gateway.com/pay?txnRef=" + mockTxnRef + "&amount=" + request.getAmount()
+                + "&sessionId=" + request.getSessionId();
     }
 
     public Payment processMockCallback(String txnRef, Long sessionId, String status) {
         ParkingSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
-        BigDecimal fee = pricingService.calculateFee(session.getVehicleType().getVehicleTypeId(), session.getEntryTime(), LocalDateTime.now());
+        BigDecimal fee = pricingService.calculateFee(session.getVehicleType().getVehicleTypeId(),
+                session.getEntryTime(), LocalDateTime.now());
 
         Payment payment = Payment.builder()
                 .session(session)
