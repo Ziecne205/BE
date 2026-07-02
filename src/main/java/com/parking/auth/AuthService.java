@@ -15,6 +15,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Optional;
+import java.util.Random;
+
+import com.parking.common.service.EmailService;
+import com.parking.entity.PasswordResetToken;
+import com.parking.repository.PasswordResetTokenRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +34,8 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final com.parking.config.AppUserDetailsService userDetailsService;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
+    private final EmailService emailService;
 
     public LoginResponse login(LoginRequest request) {
         authenticationManager.authenticate(
@@ -65,5 +73,45 @@ public class AuthService {
         UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
         String token = jwtService.generateToken(userDetails);
         return new LoginResponse(token, user.getUsername(), role.getRoleName());
+    }
+
+    public void processForgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay tai khoan voi email nay"));
+
+        // Delete any existing tokens for this user to ensure only the latest one is valid
+        passwordResetTokenRepository.deleteByUser_UserId(user.getUserId());
+
+        // Generate 6-digit OTP
+        String otp = String.format("%06d", new Random().nextInt(999999));
+
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+                .user(user)
+                .token(otp)
+                .expiryDate(LocalDateTime.now().plusMinutes(15))
+                .build();
+        
+        passwordResetTokenRepository.save(resetToken);
+
+        // Send email
+        emailService.sendPasswordResetEmail(user.getEmail(), otp);
+    }
+
+    public void resetPasswordWithToken(String token, String newPassword) {
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+                .orElseThrow(() -> new BusinessRuleException("Ma xac nhan (OTP) khong hop le"));
+
+        if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new BusinessRuleException("Ma xac nhan (OTP) da het han");
+        }
+
+        User user = resetToken.getUser();
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setUpdatedAt(LocalDateTime.now());
+        userRepository.save(user);
+
+        // Invalidate token after successful use
+        passwordResetTokenRepository.delete(resetToken);
     }
 }

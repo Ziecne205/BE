@@ -23,4 +23,16 @@ public class AuthController {
     public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
         return ApiResponse.ok("Dang ky thanh cong", authService.register(request));
     }
+
+    @PostMapping("/forgot-password")
+    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        authService.processForgotPassword(request.getEmail());
+        return ApiResponse.ok("Neu email ton tai, mot ma xac nhan (OTP) da duoc gui den ban.", null);
+    }
+
+    @PostMapping("/reset-password")
+    public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        authService.resetPasswordWithToken(request.getToken(), request.getNewPassword());
+        return ApiResponse.ok("Mat khau da duoc dat lai thanh cong.", null);
+    }
 }

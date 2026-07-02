@@ -25,6 +25,22 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:khointnse180532@fpt.edu.vn}
+    password: ${MAIL_PASSWORD:dvak avio wmes htey}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+        smtps:
+          auth: true
 
 springdoc:
   swagger-ui:
