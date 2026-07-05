@@ -80,12 +80,14 @@ public class ReservationService {
      * Quota(W) theo loai xe, toan bai, tinh bang % cua C (muc 2). So sanh theo cua so thoi gian chong lan.
      */
     private void checkQuota(ReservationRequest request, VehicleType vehicleType) {
-        List<BookingQuota> quotas = bookingQuotaRepository.findAll();
+        // Chi lay quota cua dung loai xe (thay vi findAll roi loc trong bo nho).
+        // Loc theo khung gio van lam o Java vi so sanh LocalTime dang range kho dua vao query.
+        List<BookingQuota> quotas = bookingQuotaRepository
+                .findByVehicleType_VehicleTypeId(vehicleType.getVehicleTypeId());
         var entryTimeOfDay = request.getExpectedEntryTime().toLocalTime();
 
         BookingQuota applicable = quotas.stream()
                 .filter(q -> !Boolean.FALSE.equals(q.getIsActive())) // quota tat -> bo qua
-                .filter(q -> q.getVehicleType().getVehicleTypeId().equals(vehicleType.getVehicleTypeId()))
                 .filter(q -> !entryTimeOfDay.isBefore(q.getStartTime()) && entryTimeOfDay.isBefore(q.getEndTime()))
                 .findFirst().orElse(null);
 

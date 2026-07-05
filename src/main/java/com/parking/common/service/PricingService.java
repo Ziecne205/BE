@@ -3,24 +3,36 @@ package com.parking.common.service;
 import com.parking.entity.PricingPolicy;
 import com.parking.repository.PricingPolicyRepository;
 import com.parking.repository.SystemConfigRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 @Service
+@RequiredArgsConstructor
 @SuppressWarnings("null")
 public class PricingService {
 
-    @Autowired
-    private PricingPolicyRepository pricingPolicyRepository;
+    private final PricingPolicyRepository pricingPolicyRepository;
+    private final SystemConfigRepository systemConfigRepository;
 
-    @Autowired
-    private SystemConfigRepository systemConfigRepository;
+    /**
+     * Phi co ban theo thoi luong: gia goc + (so gio vuot baseHours) * gia moi gio vuot.
+     * Day la cong thuc base+extra DUY NHAT — ca uoc tinh phi ben Driver (calculateFee) va
+     * tinh phi checkout ben Staff (SessionService) deu goi ham nay de tranh logic trong lech nhau.
+     */
+    public BigDecimal baseAndExtra(PricingPolicy policy, long minutes) {
+        long totalHours = (long) Math.ceil(minutes / 60.0);
+        BigDecimal fee = policy.getBasePrice();
+        long extraHours = totalHours - policy.getBaseHours();
+        if (extraHours > 0) {
+            fee = fee.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(extraHours)));
+        }
+        return fee;
+    }
 
     public BigDecimal calculateFee(Integer vehicleTypeId, LocalDateTime entryTime, LocalDateTime exitTime) {
         if (exitTime == null) {
@@ -34,13 +46,7 @@ public class PricingService {
         long minutes = Duration.between(entryTime, exitTime).toMinutes();
         if (minutes <= 0) return BigDecimal.ZERO;
 
-        long totalHours = (long) Math.ceil((double) minutes / 60);
-
-        BigDecimal fee = policy.getBasePrice();
-        long extraHours = totalHours - policy.getBaseHours();
-        if (extraHours > 0) {
-            fee = fee.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(extraHours)));
-        }
+        BigDecimal fee = baseAndExtra(policy, minutes);
 
         // Read day-window config — tolerates both "6" and "06:00" storage formats
         int dayStartHour = parseHourConfig(

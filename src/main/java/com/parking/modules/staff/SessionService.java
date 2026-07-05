@@ -2,6 +2,7 @@ package com.parking.modules.staff;
 
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
+import com.parking.common.service.PricingService;
 import com.parking.entity.*;
 import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.*;
@@ -42,6 +43,7 @@ public class SessionService {
     private final ParkingCardRepository parkingCardRepository;
     private final AuditLogRepository auditLogRepository;
     private final FeeConfigService feeConfigService;
+    private final PricingService pricingService;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
@@ -317,13 +319,9 @@ public class SessionService {
 
     private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket, boolean overstay) {
         long hours = (long) Math.ceil(minutes / 60.0);
-        BigDecimal amount;
-        if (hours <= policy.getBaseHours()) {
-            amount = policy.getBasePrice();
-        } else {
-            long extraHours = hours - policy.getBaseHours();
-            amount = policy.getBasePrice().add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(extraHours)));
-        }
+        // Phi co ban dung chung voi ben Driver (PricingService) — chi rieng checkout moi cong
+        // them phi mat the (lostTicket) va phu phi qua han (overstay) o duoi.
+        BigDecimal amount = pricingService.baseAndExtra(policy, minutes);
         if (lostTicket && policy.getLostTicketFee() != null) {
             amount = amount.add(policy.getLostTicketFee());
         }

@@ -36,4 +36,13 @@ public class AuthController {
         authService.resetPasswordWithToken(request.getToken(), request.getNewPassword());
         return ApiResponse.ok("Mat khau da duoc dat lai thanh cong.", null);
     }
+
+    /**
+     * JWT stateless: server khong luu phien nen "dang xuat" = client tu xoa token.
+     * Endpoint nay ton tai de FE goi (best-effort) va tra ve 200 nhat quan thay vi 404.
+     */
+    @PostMapping("/logout")
+    public ApiResponse<Void> logout() {
+        return ApiResponse.ok("Da dang xuat", null);
+    }
 }
