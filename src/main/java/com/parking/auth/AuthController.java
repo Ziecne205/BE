@@ -26,8 +26,9 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.processForgotPassword(request.getEmail());
-        return ApiResponse.ok("Neu email ton tai, mot ma xac nhan (OTP) da duoc gui den ban.", null);
+        authService.processForgotPassword(request.getUsername());
+        // Luon tra ve thong bao chung (chong do doan tai khoan ton tai — anti-enumeration).
+        return ApiResponse.ok("Nếu tài khoản tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.", null);
     }
 
     @PostMapping("/reset-password")

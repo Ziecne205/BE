@@ -30,6 +30,12 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail(ex.getMessage(), ex.getErrorCode()));
     }
 
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ApiResponse<Object>> handleBadRequest(BadRequestException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(ApiResponse.fail(ex.getMessage(), ex.getErrorCode()));
+    }
+
     /** Sai tai khoan/mat khau (hoac tai khoan chua dang ky). Khong tiet lo ly do cu the. */
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<ApiResponse<Object>> handleBadCredentials(BadCredentialsException ex) {

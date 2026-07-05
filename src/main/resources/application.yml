@@ -51,6 +51,8 @@ springdoc:
     path: /api-docs
 
 app:
+  # URL goc cua FE, dung de dung link dat lai mat khau trong email.
+  frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
   cors:
     # Danh sach origin FE duoc phep (phan cach bang dau phay). KHONG dung "*" o production.
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
