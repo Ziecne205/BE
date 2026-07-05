@@ -19,8 +19,9 @@ public class AuditLogService {
 
     private final AuditLogRepository auditLogRepository;
 
+    /** Man "xem toan bo": 200 dong moi nhat (bang append-only, chan payload). */
     public List<AuditLog> findAll() {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc();
+        return auditLogRepository.findTop200ByOrderByCreatedAtDesc();
     }
 
     public List<AuditLog> findByAction(String action) {
