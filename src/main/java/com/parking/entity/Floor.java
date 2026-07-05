@@ -1,10 +1,13 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
 @Table(name = "Floors")
+// Floor xuat hien long nhau trong ParkingSlot.floor; sau merge co the la Hibernate proxy.
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Getter
 @Setter
 @NoArgsConstructor
