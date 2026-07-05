@@ -157,6 +157,14 @@ public class PayosService {
         }
 
         String orderCode = data.path("orderCode").asText();
+        markPaymentPaid(orderCode);
+    }
+
+    /**
+     * Danh dau giao dich da thanh toan + xac nhan coc cho reservation (idempotent: bo qua neu
+     * da Success). Dung chung boi webhook (handleWebhook) va polling (verifyPaymentStatus).
+     */
+    private void markPaymentPaid(String orderCode) {
         paymentRepository.findFirstByTransactionReference(orderCode).ifPresent(payment -> {
             if ("Success".equals(payment.getPaymentStatus())) {
                 return; // da xu ly
@@ -197,21 +205,7 @@ public class PayosService {
         String status = data.path("status").asText();
 
         if ("PAID".equals(status)) {
-            paymentRepository.findFirstByTransactionReference(String.valueOf(orderCode)).ifPresent(payment -> {
-                if ("Success".equals(payment.getPaymentStatus())) {
-                    return;
-                }
-                payment.setPaymentStatus("Success");
-                payment.setPaymentTime(LocalDateTime.now());
-                paymentRepository.save(payment);
-
-                Reservation r = payment.getReservation();
-                if (r != null && "Pending".equals(r.getStatus())) {
-                    r.setDepositStatus("Paid");
-                    r.setStatus("Confirmed");
-                    reservationRepository.save(r);
-                }
-            });
+            markPaymentPaid(String.valueOf(orderCode));
         } else {
             throw new BusinessRuleException("Giao dich nay chua duoc thanh toan (trang thai PayOS: " + status + ")", "PAYMENT_NOT_PAID");
         }

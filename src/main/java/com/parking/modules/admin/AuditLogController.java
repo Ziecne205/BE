@@ -1,6 +1,7 @@
 package com.parking.modules.admin;
 
 import com.parking.common.ApiResponse;
+import com.parking.common.PageResponse;
 import com.parking.entity.AuditLog;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,9 +23,11 @@ public class AuditLogController {
     private final AuditLogService auditLogService;
 
     @GetMapping
-    @Operation(summary = "Xem toan bo nhat ky he thong")
-    public ApiResponse<List<AuditLog>> findAll() {
-        return ApiResponse.ok(auditLogService.findAll());
+    @Operation(summary = "Xem nhat ky he thong (phan trang, moi nhat truoc)")
+    public ApiResponse<PageResponse<AuditLog>> findAll(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.ok(auditLogService.findAll(page, size));
     }
 
     @GetMapping("/by-action")
