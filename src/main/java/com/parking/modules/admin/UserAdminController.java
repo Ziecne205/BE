@@ -40,8 +40,8 @@ public class UserAdminController {
     }
 
     @PatchMapping("/{id}/reset-password")
-    public ApiResponse<Void> resetPassword(@PathVariable Long id, @RequestBody String newPassword) {
-        userAdminService.resetPassword(id, newPassword);
+    public ApiResponse<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request) {
+        userAdminService.resetPassword(id, request.getNewPassword());
         return ApiResponse.ok("Da reset mat khau", null);
     }
 }

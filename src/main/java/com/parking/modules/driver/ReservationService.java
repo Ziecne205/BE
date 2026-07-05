@@ -7,6 +7,7 @@ import com.parking.repository.*;
 import com.parking.modules.manager.FeeConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -33,7 +34,10 @@ public class ReservationService {
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
 
-    @Transactional
+    // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
+    // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
+    // luu luong thap nen chi phi khoa la chap nhan duoc; danh doi de giu dung bat bien suc chua.
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public Reservation create(ReservationRequest request, String username) {
         if (!request.getExpectedExitTime().isAfter(request.getExpectedEntryTime())) {
             throw new BusinessRuleException("Gio ra phai sau gio vao");
@@ -144,6 +148,15 @@ public class ReservationService {
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
         }
+        // Cua so huy 3 gio CHI ap dung cho driver tu huy — khong ap cho scheduler (no-show /
+        // het han coc) hay cascade bao tri, vi nhung luong do co the cham booking sat/qua gio vao.
+        long hoursUntilEntry = ChronoUnit.HOURS.between(
+                LocalDateTime.now(), reservation.getExpectedEntryTime());
+        if (hoursUntilEntry < 3) {
+            throw new BusinessRuleException(
+                    "Khong the huy booking trong vong 3 gio truoc gio vao",
+                    "CANCEL_TOO_LATE");
+        }
         return cancelWithRefund(reservation, "Cancelled", true);
     }
 
@@ -159,22 +172,11 @@ public class ReservationService {
     @Transactional
     public Reservation cancelWithRefund(Reservation reservation, String newStatus, boolean refund) {
         reservation.setStatus(newStatus);
+        // Neu da dong coc thi phan anh ket qua tai chinh: refund=true -> Refunded, forfeit -> Forfeited.
+        // (Hoan/mat coc thuc te do PayOS xu ly thu cong, o day chi cap nhat trang thai.)
         if ("Paid".equals(reservation.getDepositStatus())) {
             reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
         }
-        // Enforce 3-hour cancellation window
-        long hoursUntilEntry = ChronoUnit.HOURS.between(
-                LocalDateTime.now(), reservation.getExpectedEntryTime());
-        if (hoursUntilEntry < 3) {
-            throw new BusinessRuleException(
-                    "Khong the huy booking trong vong 3 gio truoc gio vao",
-                    "CANCEL_TOO_LATE");
-        }
-        // Refund deposit if it was already paid
-        if ("Paid".equals(reservation.getDepositStatus())) {
-            reservation.setDepositStatus("Refunded");
-        }
-        reservation.setStatus("Cancelled");
         return reservationRepository.save(reservation);
     }
 

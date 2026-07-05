@@ -21,6 +21,9 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     /** Booking van con o trang thai chua check-in (Pending/Confirmed) nhung da qua gio du kien ra -> khong den nhan xe (no-show). */
     List<Reservation> findByStatusInAndExpectedExitTimeBefore(List<String> statuses, LocalDateTime threshold);
 
+    /** Booking con "Pending" (chua thanh toan coc) qua han cua so thanh toan tinh tu luc tao. */
+    List<Reservation> findByStatusAndCreatedAtBefore(String status, LocalDateTime threshold);
+
     /** Danh sach booking dang "Outstanding" cho mot loai xe, moi nhat truoc (dung cho cascade khi o bao tri). */
     List<Reservation> findByVehicleType_VehicleTypeIdAndStatusInOrderByCreatedAtDesc(
             Integer vehicleTypeId, List<String> statuses);

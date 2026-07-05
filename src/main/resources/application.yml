@@ -51,8 +51,11 @@ springdoc:
     path: /api-docs
 
 app:
+  cors:
+    # Danh sach origin FE duoc phep (phan cach bang dau phay). KHONG dung "*" o production.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
   jwt:
-    secret: change-this-secret-to-a-long-random-string-in-production-min-32-chars
+    secret: ${APP_JWT_SECRET:change-this-secret-to-a-long-random-string-in-production-min-32-chars}
     expiration-ms: 86400000 # 24h
 
 payos:

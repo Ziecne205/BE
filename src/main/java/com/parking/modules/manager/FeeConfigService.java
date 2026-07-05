@@ -20,15 +20,19 @@ public class FeeConfigService {
                 .overstayRatePerHour(getBigDecimalValue("OVERSTAY_RATE_PER_HOUR", BigDecimal.valueOf(50000))) // Default fallback
                 .noShowGraceMinutes(getIntegerValue("NO_SHOW_GRACE_MINUTES", 15))
                 .blacklistThreshold(getIntegerValue("BLACKLIST_THRESHOLD", 3))
+                .depositPaymentWindowMinutes(getIntegerValue("DEPOSIT_PAYMENT_WINDOW_MINUTES", 15))
                 .build();
     }
 
     public FeeConfigResponse updateFeeConfig(FeeConfigRequest request) {
         saveConfig("HOURLY_RATE", request.getHourlyRate() != null ? request.getHourlyRate().toString() : "0");
-        saveConfig("DEPOSIT_PERCENT", request.getDepositPercent().toString());
-        saveConfig("OVERSTAY_RATE_PER_HOUR", request.getOverstayRatePerHour().toString());
-        saveConfig("NO_SHOW_GRACE_MINUTES", request.getNoShowGraceMinutes().toString());
-        saveConfig("BLACKLIST_THRESHOLD", request.getBlacklistThreshold().toString());
+        // Cac field @NotNull -> chi luu khi khong null (phong truong hop validation bi bo qua).
+        saveConfigIfPresent("DEPOSIT_PERCENT", request.getDepositPercent());
+        saveConfigIfPresent("OVERSTAY_RATE_PER_HOUR", request.getOverstayRatePerHour());
+        saveConfigIfPresent("NO_SHOW_GRACE_MINUTES", request.getNoShowGraceMinutes());
+        saveConfigIfPresent("BLACKLIST_THRESHOLD", request.getBlacklistThreshold());
+        // Truoc day getFeeConfig doc key nay nhung updateFeeConfig khong luu -> khong the chinh qua API.
+        saveConfigIfPresent("DEPOSIT_PAYMENT_WINDOW_MINUTES", request.getDepositPaymentWindowMinutes());
 
         return getFeeConfig();
     }
@@ -43,6 +47,13 @@ public class FeeConfigService {
         return systemConfigRepository.findById(key)
                 .map(config -> Integer.parseInt(config.getConfigValue()))
                 .orElse(defaultValue);
+    }
+
+    /** Chi luu khi value khac null (giu gia tri hien tai neu request bo trong field do). */
+    private void saveConfigIfPresent(String key, Object value) {
+        if (value != null) {
+            saveConfig(key, value.toString());
+        }
     }
 
     private void saveConfig(String key, String value) {

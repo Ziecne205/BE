@@ -19,4 +19,7 @@ public class FeeConfigRequest {
 
     @NotNull
     private Integer blacklistThreshold;
+
+    /** Tuy chon: so phut cho phep thanh toan coc ke tu luc tao booking. Bo trong -> giu gia tri cu. */
+    private Integer depositPaymentWindowMinutes;
 }

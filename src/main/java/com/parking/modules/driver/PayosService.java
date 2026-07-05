@@ -10,9 +10,12 @@ import com.parking.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -50,7 +53,16 @@ public class PayosService {
 
     private final ReservationRepository reservationRepository;
     private final PaymentRepository paymentRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Timeout ket noi/doc bat buoc: khong de mot lan goi PayOS treo vo han giu ket noi DB
+    // (cac phuong thuc goi PayOS deu chay trong @Transactional).
+    private final RestTemplate restTemplate = buildRestTemplate();
+
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
+        return new RestTemplate(factory);
+    }
 
     @Transactional
     public PayosLinkResponse createDepositLink(Long reservationId, String username) {

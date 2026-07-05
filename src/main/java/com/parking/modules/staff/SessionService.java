@@ -7,6 +7,7 @@ import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -46,7 +47,9 @@ public class SessionService {
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
      * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc vao.
      */
-    @Transactional
+    // SERIALIZABLE: tinh headroom (capacity - inside - outstanding) va tao session phai nguyen tu,
+    // neu khong 2 walk-in dong thoi co the cung vuot suc chua (phantom read tren Sessions/Reservations).
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public CheckInResponse checkIn(CheckInRequest request) {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));

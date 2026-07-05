@@ -12,4 +12,6 @@ public class FeeConfigResponse {
     private BigDecimal overstayRatePerHour;
     private Integer noShowGraceMinutes;
     private Integer blacklistThreshold;
+    /** So phut cho phep thanh toan coc ke tu luc tao booking; qua han -> tu dong Expired. */
+    private Integer depositPaymentWindowMinutes;
 }

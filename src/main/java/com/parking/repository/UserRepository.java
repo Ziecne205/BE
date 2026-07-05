@@ -15,7 +15,11 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByEmail(String email);
     Optional<User> findByEmail(String email);
 
-    /** Dung cho cac tien trinh he thong (vd: scheduler tao IncidentReport) can mot User "nguoi bao cao". */
-    @Query("SELECT u FROM User u JOIN u.role r WHERE r.roleName = :roleName ORDER BY u.userId ASC")
+    /**
+     * Dung cho cac tien trinh he thong (vd: scheduler tao IncidentReport) can mot User "nguoi bao cao".
+     * So sanh khong phan biet hoa/thuong vi ten role trong DB co the la "Admin" trong khi
+     * cho goi truyen "ADMIN" — tranh scheduler khong tim thay nguoi bao cao va am tham bo qua.
+     */
+    @Query("SELECT u FROM User u JOIN u.role r WHERE UPPER(r.roleName) = UPPER(:roleName) ORDER BY u.userId ASC")
     List<User> findByRole_RoleNameOrderByUserIdAsc(@Param("roleName") String roleName);
 }
