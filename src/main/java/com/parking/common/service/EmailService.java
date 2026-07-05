@@ -19,34 +19,32 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
-    public void sendPasswordResetEmail(String toEmail, String resetLink) {
+    public void sendPasswordResetOtp(String toEmail, String otp, int ttlMinutes) {
         try {
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setFrom(fromEmail);
             helper.setTo(toEmail);
-            helper.setSubject("Yeu cau khoi phuc mat khau - Parking System");
+            helper.setSubject("Ma OTP dat lai mat khau - Parking System");
 
             String htmlContent = "<div style='font-family: Arial, sans-serif; padding: 20px;'>" +
-                    "<h2>Khoi phuc mat khau</h2>" +
-                    "<p>Ban da yeu cau khoi phuc mat khau cho tai khoan tren he thong Parking System.</p>" +
-                    "<p>Nhan vao nut ben duoi de dat lai mat khau:</p>" +
-                    "<p><a href='" + resetLink + "' " +
-                    "style='display:inline-block;padding:10px 18px;background:#007bff;color:#fff;" +
-                    "text-decoration:none;border-radius:4px;'>Dat lai mat khau</a></p>" +
-                    "<p>Hoac sao chep lien ket sau vao trinh duyet:</p>" +
-                    "<p style='word-break:break-all;'>" + resetLink + "</p>" +
-                    "<p>Lien ket nay se het han trong vong 15 phut va chi dung duoc mot lan.</p>" +
-                    "<p>Neu ban khong yeu cau khoi phuc mat khau, vui long bo qua email nay.</p>" +
+                    "<h2>Dat lai mat khau</h2>" +
+                    "<p>Ban da yeu cau dat lai mat khau tren he thong Parking System.</p>" +
+                    "<p>Ma OTP cua ban la:</p>" +
+                    "<p style='font-size:28px;font-weight:bold;letter-spacing:6px;" +
+                    "background:#f1f3f6;padding:12px 20px;border-radius:8px;display:inline-block;'>" +
+                    otp + "</p>" +
+                    "<p>Ma nay se het han trong vong " + ttlMinutes + " phut va chi dung duoc mot lan.</p>" +
+                    "<p>Neu ban khong yeu cau dat lai mat khau, vui long bo qua email nay.</p>" +
                     "</div>";
 
             helper.setText(htmlContent, true);
 
             javaMailSender.send(message);
-            log.info("Da gui email khoi phuc mat khau thanh cong den: {}", toEmail);
+            log.info("Da gui email OTP dat lai mat khau thanh cong den: {}", toEmail);
         } catch (MessagingException e) {
-            log.error("Loi khi gui email khoi phuc mat khau den {}: {}", toEmail, e.getMessage());
+            log.error("Loi khi gui email OTP dat lai mat khau den {}: {}", toEmail, e.getMessage());
         }
     }
 }

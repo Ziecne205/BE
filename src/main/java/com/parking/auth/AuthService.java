@@ -19,8 +19,6 @@ import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.util.Base64;
-import java.util.Optional;
 
 import com.parking.common.service.EmailService;
 import com.parking.entity.PasswordResetToken;
@@ -33,14 +31,10 @@ import com.parking.repository.PasswordResetTokenRepository;
 @SuppressWarnings("null")
 public class AuthService {
 
-    private static final int RESET_TOKEN_TTL_MINUTES = 15;
+    private static final int OTP_TTL_MINUTES = 10;
     private static final int PASSWORD_MIN_LEN = 6;
     private static final int PASSWORD_MAX_LEN = 50;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-
-    /** URL goc cua FE, dung de dung link dat lai mat khau trong email. */
-    @Value("${app.frontend-base-url:http://localhost:3000}")
-    private String frontendBaseUrl;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -56,7 +50,8 @@ public class AuthService {
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getUsername());
-        User user = userRepository.findByUsername(request.getUsername())
+        // request.getUsername() co the la username / email / SDT — resolve bang cung 1 truy van.
+        User user = userRepository.findByUsernameOrEmailOrPhone(request.getUsername()).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
 
         String token = jwtService.generateToken(userDetails);
@@ -90,51 +85,50 @@ public class AuthService {
     }
 
     /**
-     * Bat dau luong tu khoi phuc mat khau. Tra ve void va KHONG bao loi neu tai khoan khong ton tai
-     * (anti-enumeration): controller luon tra 200 + thong bao chung. Token la chuoi ngau nhien do dai
-     * cao (khong phai OTP 6 so) de tranh do doan, gui qua email (out-of-band).
+     * Bat dau luong khoi phuc mat khau bang OTP. Nhan dinh danh (username / email / SDT), sinh ma
+     * OTP 6 so gui toi email da dang ky cua tai khoan. Tra ve email da che (masked) de FE hien
+     * "da gui ma toi n***@gmail.com". Khac voi truoc: KHONG con anti-enumeration — bao loi ro rang
+     * neu khong tim thay tai khoan / tai khoan chua co email (theo yeu cau nghiep vu cho demo).
      */
-    public void processForgotPassword(String username) {
-        Optional<User> userOpt = userRepository.findByUsername(username);
-        if (userOpt.isEmpty()) {
-            log.info("Yeu cau quen mat khau cho username khong ton tai (bo qua): {}", username);
-            return; // Khong tiet lo tai khoan co ton tai hay khong.
-        }
-        User user = userOpt.get();
+    public String processForgotPassword(String identifier) {
+        User user = userRepository.findByUsernameOrEmailOrPhone(identifier).stream().findFirst()
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Khong tim thay tai khoan voi thong tin nay"));
 
-        // Chi giu token moi nhat cho moi user.
+        if (user.getEmail() == null || user.getEmail().isBlank()) {
+            throw new BusinessRuleException("Tai khoan chua co email de nhan ma OTP", "NO_EMAIL_ON_ACCOUNT");
+        }
+
+        // Chi giu OTP moi nhat cho moi user.
         passwordResetTokenRepository.deleteByUser_UserId(user.getUserId());
 
-        String token = generateSecureToken();
+        String otp = generateUniqueOtp();
         passwordResetTokenRepository.save(PasswordResetToken.builder()
                 .user(user)
-                .token(token)
-                .expiryDate(LocalDateTime.now().plusMinutes(RESET_TOKEN_TTL_MINUTES))
+                .token(otp)
+                .expiryDate(LocalDateTime.now().plusMinutes(OTP_TTL_MINUTES))
                 .build());
 
-        if (user.getEmail() != null && !user.getEmail().isBlank()) {
-            String resetLink = frontendBaseUrl + "/reset-password?token=" + token;
-            emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
-        } else {
-            // Khong co kenh gui -> khong the chuyen token ra ngoai. Van im lang de chong enumeration.
-            log.warn("Tai khoan {} khong co email — khong the gui link dat lai mat khau", username);
-        }
+        emailService.sendPasswordResetOtp(user.getEmail(), otp, OTP_TTL_MINUTES);
+        log.info("Da gui OTP dat lai mat khau cho user {}", user.getUsername());
+        return maskEmail(user.getEmail());
     }
 
-    public void resetPasswordWithToken(String token, String newPassword) {
+    /** Dat lai mat khau bang OTP (dung 1 lan). OTP la duy nhat toan cuc nen du de xac dinh user. */
+    public void resetPasswordWithOtp(String otp, String newPassword) {
         if (newPassword == null || newPassword.length() < PASSWORD_MIN_LEN || newPassword.length() > PASSWORD_MAX_LEN) {
             throw new BadRequestException(
                     "Mật khẩu phải có từ " + PASSWORD_MIN_LEN + " đến " + PASSWORD_MAX_LEN + " ký tự",
                     "VALIDATION_ERROR");
         }
 
-        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+        PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(otp)
                 .orElseThrow(() -> new BadRequestException(
-                        "Liên kết đặt lại không hợp lệ hoặc đã hết hạn", "INVALID_TOKEN"));
+                        "Mã OTP không hợp lệ", "INVALID_OTP"));
 
         if (resetToken.getExpiryDate().isBefore(LocalDateTime.now())) {
             passwordResetTokenRepository.delete(resetToken);
-            throw new BadRequestException("Liên kết đặt lại không hợp lệ hoặc đã hết hạn", "TOKEN_EXPIRED");
+            throw new BadRequestException("Mã OTP đã hết hạn, vui lòng yêu cầu mã mới", "OTP_EXPIRED");
         }
 
         User user = resetToken.getUser();
@@ -142,14 +136,27 @@ public class AuthService {
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
-        // Token dung mot lan: xoa sau khi doi mat khau thanh cong.
+        // OTP dung mot lan: xoa sau khi doi mat khau thanh cong.
         passwordResetTokenRepository.delete(resetToken);
     }
 
-    /** Token ngau nhien 256-bit, ma hoa URL-safe Base64 — khong the do doan (thay cho OTP 6 so). */
-    private String generateSecureToken() {
-        byte[] bytes = new byte[32];
-        SECURE_RANDOM.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    /** OTP 6 so, duy nhat toan cuc (cot Token co rang buoc UNIQUE) — sinh lai neu trung. */
+    private String generateUniqueOtp() {
+        for (int attempt = 0; attempt < 5; attempt++) {
+            String otp = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+            if (passwordResetTokenRepository.findByToken(otp).isEmpty()) {
+                return otp;
+            }
+        }
+        throw new BusinessRuleException("Khong the tao ma OTP, vui long thu lai", "OTP_GENERATION_FAILED");
+    }
+
+    /** "nguyenkhoi2004vt@gmail.com" -> "ngu***@gmail.com" (che phan dau de tranh lo email day du). */
+    private String maskEmail(String email) {
+        int at = email.indexOf('@');
+        if (at <= 0) return "***";
+        String name = email.substring(0, at);
+        String shown = name.length() <= 3 ? name.substring(0, 1) : name.substring(0, 3);
+        return shown + "***" + email.substring(at);
     }
 }

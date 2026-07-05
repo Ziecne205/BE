@@ -5,8 +5,8 @@ import lombok.Data;
 
 @Data
 public class ResetPasswordRequest {
-    @NotBlank(message = "Token khong duoc de trong")
-    private String token;
+    @NotBlank(message = "Ma OTP khong duoc de trong")
+    private String otp;
 
     // Chinh sach do dai (6-50) do service kiem tra de tra ve errorCode VALIDATION_ERROR dung hop dong.
     private String newPassword;

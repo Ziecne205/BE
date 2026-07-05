@@ -22,9 +22,10 @@ public class AppUserDetailsService implements UserDetailsService {
     private final UserRepository userRepository;
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException("Khong tim thay user: " + username));
+    public UserDetails loadUserByUsername(String loginId) throws UsernameNotFoundException {
+        // loginId co the la username, email hoac so dien thoai — chap nhan ca ba.
+        User user = userRepository.findByUsernameOrEmailOrPhone(loginId).stream().findFirst()
+                .orElseThrow(() -> new UsernameNotFoundException("Khong tim thay user: " + loginId));
 
         return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())

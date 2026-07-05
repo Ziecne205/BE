@@ -25,15 +25,15 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ApiResponse<Void> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
-        authService.processForgotPassword(request.getUsername());
-        // Luon tra ve thong bao chung (chong do doan tai khoan ton tai — anti-enumeration).
-        return ApiResponse.ok("Nếu tài khoản tồn tại, hướng dẫn đặt lại mật khẩu đã được gửi.", null);
+    public ApiResponse<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        // Tra ve email da che (n***@gmail.com) trong `data` de FE hien "da gui OTP toi ...".
+        String maskedEmail = authService.processForgotPassword(request.getIdentifier());
+        return ApiResponse.ok("Đã gửi mã OTP tới email của bạn.", maskedEmail);
     }
 
     @PostMapping("/reset-password")
     public ApiResponse<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        authService.resetPasswordWithToken(request.getToken(), request.getNewPassword());
+        authService.resetPasswordWithOtp(request.getOtp(), request.getNewPassword());
         return ApiResponse.ok("Mat khau da duoc dat lai thanh cong.", null);
     }
 
