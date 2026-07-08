@@ -314,7 +314,17 @@ public class SessionService {
                 .hasReservation(s.getReservation() != null)
                 .hasCard(s.getCard() != null)
                 .parkedMinutes(Duration.between(s.getEntryTime(), now).toMinutes())
+                .estimatedFee(estimateFee(s, now))
                 .build();
+    }
+
+    /** Phi tam tinh cho phien dang mo (theo bang gia hien hanh, den thoi diem now). */
+    private BigDecimal estimateFee(ParkingSession s, LocalDateTime now) {
+        try {
+            return pricingService.calculateFee(s.getVehicleType().getVehicleTypeId(), s.getEntryTime(), now);
+        } catch (RuntimeException e) {
+            return null; // chua cau hinh bang gia cho loai xe nay -> bo trong phi tam tinh
+        }
     }
 
     private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket, boolean overstay) {
