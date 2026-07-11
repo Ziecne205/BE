@@ -20,11 +20,16 @@ public class PaymentDriverController {
 
     @PostMapping("/payos/create-link")
     public ApiResponse<PayosLinkResponse> createPayosLink(@RequestBody PayosLinkRequest request, Authentication auth) {
-        if (!"DEPOSIT".equalsIgnoreCase(request.getType())) {
-            return ApiResponse.fail("Hien chi ho tro thanh toan coc (DEPOSIT)");
+        // DEPOSIT: id = reservationId (tien coc dat cho). PARKING: id = sessionId (phi gui xe phien dang do).
+        if ("DEPOSIT".equalsIgnoreCase(request.getType())) {
+            return ApiResponse.ok("Tao link PayOS thanh cong",
+                    payosService.createDepositLink(request.getId(), auth.getName()));
         }
-        return ApiResponse.ok("Tao link PayOS thanh cong",
-                payosService.createDepositLink(request.getId(), auth.getName()));
+        if ("PARKING".equalsIgnoreCase(request.getType())) {
+            return ApiResponse.ok("Tao link PayOS thanh cong",
+                    paymentDriverService.createParkingLink(request.getId(), auth.getName()));
+        }
+        return ApiResponse.fail("Loai thanh toan khong hop le (chi ho tro DEPOSIT hoac PARKING)");
     }
 
     @PostMapping("/checkout")
