@@ -35,13 +35,21 @@ public class PricingService {
     }
 
     public BigDecimal calculateFee(Integer vehicleTypeId, LocalDateTime entryTime, LocalDateTime exitTime) {
-        if (exitTime == null) {
-            exitTime = LocalDateTime.now();
-        }
-
         PricingPolicy policy = pricingPolicyRepository
                 .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(vehicleTypeId, "Active")
                 .orElseThrow(() -> new RuntimeException("No active pricing policy found for vehicle type"));
+        return calculateFee(policy, entryTime, exitTime);
+    }
+
+    /**
+     * Base+extra + night surcharge for an already-resolved policy. Exposed so callers that must
+     * add further surcharges (e.g. Staff checkout: overstay + lost-ticket) reuse the exact same
+     * time-based formula instead of re-deriving it — keeps every fee quote and charge in lockstep.
+     */
+    public BigDecimal calculateFee(PricingPolicy policy, LocalDateTime entryTime, LocalDateTime exitTime) {
+        if (exitTime == null) {
+            exitTime = LocalDateTime.now();
+        }
 
         long minutes = Duration.between(entryTime, exitTime).toMinutes();
         if (minutes <= 0) return BigDecimal.ZERO;

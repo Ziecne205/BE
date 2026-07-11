@@ -100,6 +100,21 @@ public class PayosService {
         return resp;
     }
 
+    /**
+     * Tao link/QR PayOS cho MOT so tien bat ky (dung cho phi gui xe dong tai cong ra — staff).
+     * Ban than ham chi goi PayOS; caller (SessionService.createFeeLink) chiu trach nhiem luu
+     * Payment "Pending" theo orderCode de webhook/polling doi chieu khi khach thanh toan, va de
+     * check-out nhan ra phien da tra online (tranh thu phi 2 lan). Tai khoan nhan (PayOS keys) khong doi.
+     */
+    public PayosLinkResponse createLinkForAmount(long refId, long amount, String description) {
+        if (clientId == null || clientId.isBlank()) {
+            throw new BusinessRuleException("PayOS chua duoc cau hinh (thieu key)", "PAYOS_NOT_CONFIGURED");
+        }
+        long safeAmount = amount < 1000 ? 2000 : amount; // PayOS yeu cau so tien toi thieu
+        long orderCode = buildOrderCode(refId);
+        return callCreatePaymentLink(orderCode, safeAmount, truncate(description, 25));
+    }
+
     private PayosLinkResponse callCreatePaymentLink(long orderCode, long amount, String description) {
         // Chu ky: cac field sap xep theo alphabet.
         String signData = "amount=" + amount

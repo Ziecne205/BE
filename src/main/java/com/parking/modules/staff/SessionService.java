@@ -4,12 +4,17 @@ import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.PricingService;
 import com.parking.entity.*;
+import com.parking.modules.driver.PayosLinkResponse;
+import com.parking.modules.driver.PayosService;
 import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -44,6 +49,8 @@ public class SessionService {
     private final AuditLogRepository auditLogRepository;
     private final FeeConfigService feeConfigService;
     private final PricingService pricingService;
+    private final PayosService payosService;
+    private final PlatformTransactionManager txManager;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
@@ -197,15 +204,14 @@ public class SessionService {
         LocalDateTime exitTime = LocalDateTime.now();
         long minutes = Duration.between(session.getEntryTime(), exitTime).toMinutes();
 
-        PricingPolicy policy = pricingPolicyRepository
-                .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(
-                        session.getVehicleType().getVehicleTypeId(), "Active")
-                .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
+        PricingPolicy policy = activePolicy(session.getVehicleType().getVehicleTypeId());
 
         boolean lostTicket = request.isLostTicket();
         long hours = (long) Math.ceil(minutes / 60.0);
         boolean overstay = hours > OVERSTAY_GRACE_HOURS;
-        BigDecimal amount = calculateAmount(policy, minutes, lostTicket, overstay);
+        // Same formula as the live estimate / PayOS QR (computeFee), plus the lost-ticket fee that
+        // is only known at the gate — so what the customer was quoted matches what we charge.
+        BigDecimal amount = computeFee(policy, session, exitTime, lostTicket);
         BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
                 ? policy.getLostTicketFee() : BigDecimal.ZERO;
 
@@ -245,23 +251,44 @@ public class SessionService {
             parkingCardRepository.save(card);
         }
 
-        String paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
-        Payment payment = Payment.builder()
-                .session(session)
-                .reservation(session.getReservation())
-                .amount(amount)
-                .paymentMethod(paymentMethod)
-                .paymentTime(exitTime)
-                .paymentStatus("Success")
-                .build();
-        paymentRepository.save(payment);
+        // Settlement — if the customer already paid this session online via a PayOS fee QR
+        // (webhook flipped that payment to Success), reconcile against it instead of raising a
+        // second charge. Otherwise record the gate payment (cash by default) as before.
+        Payment onlinePaid = paymentRepository.findBySession_SessionId(session.getSessionId())
+                .stream()
+                .filter(p -> "Success".equals(p.getPaymentStatus()))
+                .findFirst()
+                .orElse(null);
+
+        String paymentMethod;
+        BigDecimal settledAmount;
+        if (onlinePaid != null) {
+            paymentMethod = onlinePaid.getPaymentMethod();
+            settledAmount = onlinePaid.getAmount();
+            if (onlinePaid.getReservation() == null && session.getReservation() != null) {
+                onlinePaid.setReservation(session.getReservation());
+                paymentRepository.save(onlinePaid);
+            }
+        } else {
+            paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
+            settledAmount = amount;
+            paymentRepository.save(Payment.builder()
+                    .session(session)
+                    .reservation(session.getReservation())
+                    .amount(amount)
+                    .paymentMethod(paymentMethod)
+                    .paymentTime(exitTime)
+                    .paymentStatus("Success")
+                    .build());
+        }
 
         AuditLog log = AuditLog.builder()
                 .action("STAFF_CHECK_OUT")
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
                 .detail("Staff checked out vehicle: " + request.getLicensePlate()
-                        + " | " + minutes + " min | " + amount + " VND"
+                        + " | " + minutes + " min | " + settledAmount + " VND | " + paymentMethod
+                        + (onlinePaid != null ? " (ONLINE, computed=" + amount + ")" : "")
                         + (lostTicket ? " | LOST TICKET" : "")
                         + (plateMismatch ? " | PLATE MISMATCH (in=" + session.getLicensePlateIn() + ")" : ""))
                 .createdAt(exitTime)
@@ -277,7 +304,7 @@ public class SessionService {
                 .exitTime(exitTime)
                 .parkedMinutes(minutes)
                 .vehicleTypeName(session.getVehicleType().getTypeName())
-                .amount(amount)
+                .amount(settledAmount)
                 .lostTicketFee(lostTicketFee)
                 .paymentMethod(paymentMethod)
                 .paymentStatus("Success")
@@ -293,6 +320,57 @@ public class SessionService {
         LocalDateTime now = LocalDateTime.now();
         return sessions.stream().map(s -> toActiveSessionDto(s, now)).toList();
     }
+
+    /**
+     * Tao QR PayOS cho phi gui xe hien tai cua mot phien dang mo (dynamic theo thoi gian do).
+     *
+     * Chay NGOAI transaction (NOT_SUPPORTED) va chia 3 pha de KHONG giu ket noi DB trong luc goi
+     * PayOS (HTTP co the mat ~15s): (1) doc + dinh gia phien trong 1 tx ngan, (2) goi PayOS khi
+     * khong con giu tx, (3) luu Payment Pending trong 1 tx ngan. Tranh can kiet connection pool
+     * khi nhieu cong ra tao QR dong thoi.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public PayosLinkResponse createFeeLink(Long sessionId) {
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+
+        // Pha 1 (tx ngan): tai + kiem tra + tinh phi (co truy cap lazy vehicleType) roi tra ket noi.
+        // Chi giu lai cac gia tri nguyen thuy can cho pha sau -> khong con phu thuoc persistence context.
+        FeeQuote quote = tx.execute(status -> {
+            ParkingSession session = sessionRepository.findById(sessionId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien #" + sessionId));
+            if (!OPEN_SESSION_STATUSES.contains(session.getStatus())) {
+                throw new BusinessRuleException("Phien khong o trang thai mo de thanh toan");
+            }
+            BigDecimal fee = estimateFee(session, LocalDateTime.now());
+            if (fee == null) {
+                throw new BusinessRuleException("Chua co bang gia de tinh phi cho loai xe nay", "PRICING_NOT_CONFIGURED");
+            }
+            return new FeeQuote(session.getSessionId(), session.getLicensePlateIn(), fee);
+        });
+
+        // Pha 2 (KHONG giu tx): goi PayOS — khong ghim ket noi DB trong suot HTTP call.
+        PayosLinkResponse link = payosService.createLinkForAmount(
+                quote.sessionId(), quote.fee().longValue(), "Phi gui xe " + quote.plate());
+
+        // Pha 3 (tx ngan): luu Payment "Pending" theo orderCode de webhook/polling doi chieu khi
+        // khach thanh toan, va de check-out nhan ra (tranh thu phi 2 lan). So tien luu = so tien
+        // thuc gui PayOS (sau khi ap san toi thieu), khop voi thuc te. getReferenceById chi lay proxy
+        // de set khoa ngoai SessionID, khong ton them SELECT.
+        tx.executeWithoutResult(status ->
+                paymentRepository.save(Payment.builder()
+                        .session(sessionRepository.getReferenceById(quote.sessionId()))
+                        .amount(BigDecimal.valueOf(link.getAmount()))
+                        .paymentMethod("PayOS")
+                        .paymentTime(LocalDateTime.now())
+                        .paymentStatus("Pending")
+                        .transactionReference(String.valueOf(link.getOrderCode()))
+                        .build()));
+
+        return link;
+    }
+
+    /** Gia tri nguyen thuy trich tu pha doc de dung sau khi transaction da dong (tranh lazy-init). */
+    private record FeeQuote(Long sessionId, String plate, BigDecimal fee) {}
 
     public ActiveSessionDto searchActiveByPlate(String licensePlate) {
         ParkingSession session = sessionRepository
@@ -321,26 +399,39 @@ public class SessionService {
     /** Phi tam tinh cho phien dang mo (theo bang gia hien hanh, den thoi diem now). */
     private BigDecimal estimateFee(ParkingSession s, LocalDateTime now) {
         try {
-            return pricingService.calculateFee(s.getVehicleType().getVehicleTypeId(), s.getEntryTime(), now);
+            PricingPolicy policy = activePolicy(s.getVehicleType().getVehicleTypeId());
+            // lostTicket=false: unknown until the gate. Everything else (base+extra+night+overstay)
+            // is identical to what check-out charges, so the quote can't drift from the charge.
+            return computeFee(policy, s, now, false);
         } catch (RuntimeException e) {
             return null; // chua cau hinh bang gia cho loai xe nay -> bo trong phi tam tinh
         }
     }
 
-    private BigDecimal calculateAmount(PricingPolicy policy, long minutes, boolean lostTicket, boolean overstay) {
-        long hours = (long) Math.ceil(minutes / 60.0);
-        // Phi co ban dung chung voi ben Driver (PricingService) — chi rieng checkout moi cong
-        // them phi mat the (lostTicket) va phu phi qua han (overstay) o duoi.
-        BigDecimal amount = pricingService.baseAndExtra(policy, minutes);
-        if (lostTicket && policy.getLostTicketFee() != null) {
-            amount = amount.add(policy.getLostTicketFee());
-        }
-        if (overstay) {
-            // Phu phi qua han: su dung overstayRatePerHour cau hinh toan cuc thay vi extraHourPrice
-            long overstayHours = hours - OVERSTAY_GRACE_HOURS;
+    private PricingPolicy activePolicy(Integer vehicleTypeId) {
+        return pricingPolicyRepository
+                .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(vehicleTypeId, "Active")
+                .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
+    }
+
+    /**
+     * Canonical parking fee for a session up to {@code exitTime}. Single source of truth shared by
+     * the live estimate / PayOS QR (lostTicket=false) and the real check-out (lostTicket as marked),
+     * so a quoted amount cannot diverge from the charged amount. Composition:
+     *   base + extra-hours + night surcharge   (PricingService.calculateFee — same as Driver estimate)
+     *   + overstay surcharge                    (global rate, for hours beyond OVERSTAY_GRACE_HOURS)
+     *   + lost-ticket fee                       (check-out only)
+     */
+    private BigDecimal computeFee(PricingPolicy policy, ParkingSession session, LocalDateTime exitTime, boolean lostTicket) {
+        BigDecimal fee = pricingService.calculateFee(policy, session.getEntryTime(), exitTime);
+        long hours = (long) Math.ceil(Duration.between(session.getEntryTime(), exitTime).toMinutes() / 60.0);
+        if (hours > OVERSTAY_GRACE_HOURS) {
             BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
-            amount = amount.add(overstayRate.multiply(BigDecimal.valueOf(overstayHours)));
+            fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours - OVERSTAY_GRACE_HOURS)));
         }
-        return amount;
+        if (lostTicket && policy.getLostTicketFee() != null) {
+            fee = fee.add(policy.getLostTicketFee());
+        }
+        return fee;
     }
 }

@@ -1,6 +1,7 @@
 package com.parking.modules.staff;
 
 import com.parking.common.ApiResponse;
+import com.parking.modules.driver.PayosLinkResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -48,5 +49,11 @@ public class SessionController {
     public ApiResponse<CheckInResponse> forceCheckIn(@PathVariable Long id,
                                                       @Valid @RequestBody ForceCheckInRequest request) {
         return ApiResponse.ok("Da force check-in", sessionService.forceCheckIn(id, request));
+    }
+
+    @PostMapping("/{id}/payos-link")
+    @Operation(summary = "Tao QR PayOS cho phi gui xe cua phien (dynamic theo thoi gian do) - cong ra")
+    public ApiResponse<PayosLinkResponse> createFeeLink(@PathVariable Long id) {
+        return ApiResponse.ok("Tao QR thanh toan thanh cong", sessionService.createFeeLink(id));
     }
 }
