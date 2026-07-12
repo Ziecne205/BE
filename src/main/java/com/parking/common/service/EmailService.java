@@ -20,31 +20,52 @@ public class EmailService {
     private String fromEmail;
 
     public void sendPasswordResetOtp(String toEmail, String otp, int ttlMinutes) {
+        sendOtpEmail(toEmail,
+                "Ma OTP dat lai mat khau - Parking System",
+                "Dat lai mat khau",
+                "Ban da yeu cau dat lai mat khau tren he thong Parking System.",
+                otp, ttlMinutes);
+    }
+
+    public void sendRegistrationOtp(String toEmail, String otp, int ttlMinutes) {
+        sendOtpEmail(toEmail,
+                "Ma OTP xac nhan dang ky - Parking System",
+                "Xac nhan dang ky tai khoan",
+                "Ban dang dang ky tai khoan tren he thong Parking System. Hay nhap ma OTP de hoan tat.",
+                otp, ttlMinutes);
+    }
+
+    /**
+     * Gui email OTP (HTML). Nuot MessagingException (chi log) — nhat quan voi hanh vi truoc day:
+     * luong goi khong bi vo neu SMTP tam loi; nguoi dung co the bam "gui lai".
+     */
+    private void sendOtpEmail(String toEmail, String subject, String heading, String intro,
+                              String otp, int ttlMinutes) {
         try {
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
 
             helper.setFrom(fromEmail);
             helper.setTo(toEmail);
-            helper.setSubject("Ma OTP dat lai mat khau - Parking System");
+            helper.setSubject(subject);
 
             String htmlContent = "<div style='font-family: Arial, sans-serif; padding: 20px;'>" +
-                    "<h2>Dat lai mat khau</h2>" +
-                    "<p>Ban da yeu cau dat lai mat khau tren he thong Parking System.</p>" +
+                    "<h2>" + heading + "</h2>" +
+                    "<p>" + intro + "</p>" +
                     "<p>Ma OTP cua ban la:</p>" +
                     "<p style='font-size:28px;font-weight:bold;letter-spacing:6px;" +
                     "background:#f1f3f6;padding:12px 20px;border-radius:8px;display:inline-block;'>" +
                     otp + "</p>" +
                     "<p>Ma nay se het han trong vong " + ttlMinutes + " phut va chi dung duoc mot lan.</p>" +
-                    "<p>Neu ban khong yeu cau dat lai mat khau, vui long bo qua email nay.</p>" +
+                    "<p>Neu ban khong yeu cau thao tac nay, vui long bo qua email nay.</p>" +
                     "</div>";
 
             helper.setText(htmlContent, true);
 
             javaMailSender.send(message);
-            log.info("Da gui email OTP dat lai mat khau thanh cong den: {}", toEmail);
+            log.info("Da gui email OTP thanh cong den: {} ({})", toEmail, subject);
         } catch (MessagingException e) {
-            log.error("Loi khi gui email OTP dat lai mat khau den {}: {}", toEmail, e.getMessage());
+            log.error("Loi khi gui email OTP den {}: {}", toEmail, e.getMessage());
         }
     }
 }

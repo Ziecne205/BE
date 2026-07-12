@@ -55,7 +55,7 @@ app:
   frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
   cors:
     # Danh sach origin FE duoc phep (phan cach bang dau phay). KHONG dung "*" o production.
-    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:5173}
   jwt:
     secret: ${APP_JWT_SECRET:change-this-secret-to-a-long-random-string-in-production-min-32-chars}
     # 8h. JWT stateless nen khong the thu hoi truoc han — vong doi du dai de phien lam viec

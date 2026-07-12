@@ -19,6 +19,8 @@ import org.springframework.stereotype.Service;
 
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import com.parking.common.service.EmailService;
 import com.parking.entity.PasswordResetToken;
@@ -32,6 +34,7 @@ import com.parking.repository.PasswordResetTokenRepository;
 public class AuthService {
 
     private static final int OTP_TTL_MINUTES = 10;
+    private static final int REG_OTP_TTL_MINUTES = 10;
     private static final int PASSWORD_MIN_LEN = 6;
     private static final int PASSWORD_MAX_LEN = 50;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
@@ -44,6 +47,19 @@ public class AuthService {
     private final com.parking.config.AppUserDetailsService userDetailsService;
     private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
+
+    /**
+     * OTP dang ky luu TAM trong bo nho — KHONG tao User cho toi khi OTP duoc xac thuc. Key theo email.
+     * Chu y dung bang DB de: (1) tranh migration cho ddl-auto: validate, (2) khong de lai User "rac"
+     * chua xac thuc lam email/username bi "chiem". Danh doi: pending mat khi restart BE (OK cho dev).
+     */
+    private final Map<String, PendingRegistration> pendingRegistrations = new ConcurrentHashMap<>();
+
+    /** Du lieu dang ky dang cho xac thuc OTP (mat khau da bam san). */
+    private record PendingRegistration(String username, String passwordHash, String fullName,
+                                       String phoneNumber, String email, String otp,
+                                       LocalDateTime expiresAt) {
+    }
 
     public LoginResponse login(LoginRequest request) {
         authenticationManager.authenticate(
@@ -140,15 +156,108 @@ public class AuthService {
         passwordResetTokenRepository.delete(resetToken);
     }
 
+    /**
+     * Bat dau dang ky bang OTP email: validate trung username/email, sinh OTP, luu TAM (chua tao User)
+     * va gui OTP toi email. Tra ve email da che de FE hien "da gui ma toi n***@gmail.com".
+     */
+    public String startRegistration(RegisterRequest request) {
+        String email = request.getEmail();
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("Email khong duoc de trong", "VALIDATION_ERROR");
+        }
+        if (userRepository.existsByUsername(request.getUsername())) {
+            throw new BusinessRuleException("Username da ton tai");
+        }
+        if (userRepository.existsByEmail(email)) {
+            throw new BusinessRuleException("Email da duoc su dung");
+        }
+
+        purgeExpiredRegistrations();
+        String otp = randomOtp();
+        pendingRegistrations.put(email.toLowerCase(), new PendingRegistration(
+                request.getUsername(),
+                passwordEncoder.encode(request.getPassword()),
+                request.getFullName(),
+                request.getPhoneNumber(),
+                email,
+                otp,
+                LocalDateTime.now().plusMinutes(REG_OTP_TTL_MINUTES)));
+
+        emailService.sendRegistrationOtp(email, otp, REG_OTP_TTL_MINUTES);
+        log.info("Da gui OTP dang ky cho email {}", email);
+        return maskEmail(email);
+    }
+
+    /**
+     * Xac thuc OTP dang ky -> tao User (role Driver, Active) va tra JWT de tu dong dang nhap.
+     * OTP dung mot lan; xoa pending sau khi tao thanh cong.
+     */
+    public LoginResponse verifyRegistration(String email, String otp) {
+        if (email == null || email.isBlank()) {
+            throw new BadRequestException("Email khong duoc de trong", "VALIDATION_ERROR");
+        }
+        purgeExpiredRegistrations();
+        String key = email.toLowerCase();
+        PendingRegistration pending = pendingRegistrations.get(key);
+        if (pending == null) {
+            throw new BadRequestException(
+                    "Khong tim thay yeu cau dang ky cho email nay, vui long dang ky lai",
+                    "NO_PENDING_REGISTRATION");
+        }
+        if (pending.expiresAt().isBefore(LocalDateTime.now())) {
+            pendingRegistrations.remove(key);
+            throw new BadRequestException("Ma OTP da het han, vui long dang ky lai", "OTP_EXPIRED");
+        }
+        if (!pending.otp().equals(otp)) {
+            throw new BadRequestException("Ma OTP khong hop le", "INVALID_OTP");
+        }
+        // Trong luc cho OTP, username/email co the da bi dang ky boi mot luong khac.
+        if (userRepository.existsByUsername(pending.username()) || userRepository.existsByEmail(pending.email())) {
+            pendingRegistrations.remove(key);
+            throw new BusinessRuleException("Tai khoan da ton tai");
+        }
+
+        Role role = roleRepository.findByRoleName("Driver")
+                .orElseThrow(() -> new BusinessRuleException("He thong chua cau hinh Role Driver"));
+
+        User user = User.builder()
+                .username(pending.username())
+                .passwordHash(pending.passwordHash())
+                .fullName(pending.fullName())
+                .phoneNumber(pending.phoneNumber())
+                .email(pending.email())
+                .role(role)
+                .status("Active")
+                .createdAt(LocalDateTime.now())
+                .build();
+        userRepository.save(user);
+        pendingRegistrations.remove(key);
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
+        String token = jwtService.generateToken(userDetails);
+        return new LoginResponse(token, user.getUsername(), role.getRoleName());
+    }
+
+    /** OTP 6 so ngau nhien. */
+    private String randomOtp() {
+        return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+    }
+
     /** OTP 6 so, duy nhat toan cuc (cot Token co rang buoc UNIQUE) — sinh lai neu trung. */
     private String generateUniqueOtp() {
         for (int attempt = 0; attempt < 5; attempt++) {
-            String otp = String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+            String otp = randomOtp();
             if (passwordResetTokenRepository.findByToken(otp).isEmpty()) {
                 return otp;
             }
         }
         throw new BusinessRuleException("Khong the tao ma OTP, vui long thu lai", "OTP_GENERATION_FAILED");
+    }
+
+    /** Don cac pending registration da het han (goi truoc moi lan doc/ghi). */
+    private void purgeExpiredRegistrations() {
+        LocalDateTime now = LocalDateTime.now();
+        pendingRegistrations.values().removeIf(p -> p.expiresAt().isBefore(now));
     }
 
     /** "nguyenkhoi2004vt@gmail.com" -> "ngu***@gmail.com" (che phan dau de tranh lo email day du). */

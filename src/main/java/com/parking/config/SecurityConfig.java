@@ -34,7 +34,7 @@ public class SecurityConfig {
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
     /** Cac origin FE duoc phep goi API (cau hinh qua app.cors.allowed-origins, phan cach bang dau phay). */
-    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001,http://localhost:5173}")
     private List<String> allowedOrigins;
 
     @Bean

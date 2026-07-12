@@ -24,6 +24,19 @@ public class AuthController {
         return ApiResponse.ok("Dang ky thanh cong", authService.register(request));
     }
 
+    /** Buoc 1 dang ky co xac thuc email: gui OTP toi email, chua tao tai khoan. */
+    @PostMapping("/register/send-otp")
+    public ApiResponse<String> sendRegisterOtp(@Valid @RequestBody RegisterRequest request) {
+        String maskedEmail = authService.startRegistration(request);
+        return ApiResponse.ok("Đã gửi mã OTP xác nhận tới email của bạn.", maskedEmail);
+    }
+
+    /** Buoc 2: xac thuc OTP -> tao tai khoan Driver va tra JWT (tu dong dang nhap). */
+    @PostMapping("/register/verify")
+    public ApiResponse<LoginResponse> verifyRegister(@Valid @RequestBody VerifyRegistrationRequest request) {
+        return ApiResponse.ok("Đăng ký thành công", authService.verifyRegistration(request.getEmail(), request.getOtp()));
+    }
+
     @PostMapping("/forgot-password")
     public ApiResponse<String> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
         // Tra ve email da che (n***@gmail.com) trong `data` de FE hien "da gui OTP toi ...".
