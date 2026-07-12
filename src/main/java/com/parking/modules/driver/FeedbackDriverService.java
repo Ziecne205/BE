@@ -1,5 +1,7 @@
 package com.parking.modules.driver;
 
+import com.parking.common.exception.BusinessRuleException;
+import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.entity.Feedback;
 import com.parking.entity.ParkingSession;
 import com.parking.entity.User;
@@ -23,22 +25,24 @@ public class FeedbackDriverService {
 
     public Feedback submitFeedback(FeedbackRequest request, String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         ParkingSession session = sessionRepository.findById(request.getSessionId())
-                .orElseThrow(() -> new RuntimeException("Session not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Session not found"));
 
-        if (!session.getDriver().getUserId().equals(user.getUserId())) {
-            throw new RuntimeException("Access denied: You can only review your own session");
+        // Guard: session must have a linked driver, and it must be the caller
+        if (session.getDriver() == null
+                || !session.getDriver().getUserId().equals(user.getUserId())) {
+            throw new BusinessRuleException("Ban chi co the danh gia phien cua chinh minh");
         }
 
         if (!"Completed".equals(session.getStatus())) {
-            throw new RuntimeException("Feedback can only be submitted for Completed sessions");
+            throw new BusinessRuleException("Chi co the danh gia phien da hoan thanh");
         }
 
         // Check if feedback already exists for this session
         if (feedbackRepository.existsBySession_SessionId(session.getSessionId())) {
-            throw new RuntimeException("Feedback already submitted for this session");
+            throw new BusinessRuleException("Phien nay da duoc danh gia truoc do");
         }
 
         Feedback feedback = Feedback.builder()

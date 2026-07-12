@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Danh sach cong vao/ra - phuc vu chon cong khi check-in / check-out (nhap tay,
@@ -29,10 +30,11 @@ public class GateController {
 
     @GetMapping
     @Operation(summary = "Lay danh sach cong (loc theo type=Entry|Exit neu can)")
-    public ApiResponse<List<Gate>> findAll(@RequestParam(required = false) String type) {
+    public ApiResponse<List<GateResponse>> findAll(@RequestParam(required = false) String type) {
         List<Gate> gates = (type != null && !type.isBlank())
                 ? gateRepository.findByGateType(type)
                 : gateRepository.findAll();
-        return ApiResponse.ok("Danh sach cong", gates);
+        return ApiResponse.ok("Danh sach cong",
+                gates.stream().map(GateResponse::from).collect(Collectors.toList()));
     }
 }

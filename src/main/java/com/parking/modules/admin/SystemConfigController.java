@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,20 +35,21 @@ public class SystemConfigController {
 
     @PostMapping
     @Operation(summary = "Tao cau hinh moi")
-    public ApiResponse<SystemConfig> create(@Valid @RequestBody SystemConfigRequest request) {
-        return ApiResponse.ok("Tao cau hinh thanh cong", systemConfigService.create(request));
+    public ApiResponse<SystemConfig> create(@Valid @RequestBody SystemConfigRequest request, Authentication auth) {
+        return ApiResponse.ok("Tao cau hinh thanh cong", systemConfigService.create(request, auth.getName()));
     }
 
     @PutMapping("/{key}")
     @Operation(summary = "Cap nhat gia tri cau hinh")
-    public ApiResponse<SystemConfig> update(@PathVariable String key, @Valid @RequestBody SystemConfigRequest request) {
-        return ApiResponse.ok("Cap nhat thanh cong", systemConfigService.update(key, request));
+    public ApiResponse<SystemConfig> update(@PathVariable String key, @Valid @RequestBody SystemConfigRequest request,
+                                             Authentication auth) {
+        return ApiResponse.ok("Cap nhat thanh cong", systemConfigService.update(key, request, auth.getName()));
     }
 
     @DeleteMapping("/{key}")
     @Operation(summary = "Xoa cau hinh")
-    public ApiResponse<Void> delete(@PathVariable String key) {
-        systemConfigService.delete(key);
+    public ApiResponse<Void> delete(@PathVariable String key, Authentication auth) {
+        systemConfigService.delete(key, auth.getName());
         return ApiResponse.ok("Da xoa cau hinh", null);
     }
 }

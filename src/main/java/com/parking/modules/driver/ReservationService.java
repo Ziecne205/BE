@@ -4,12 +4,14 @@ import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.entity.*;
 import com.parking.repository.*;
+import com.parking.modules.manager.FeeConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 /**
@@ -20,14 +22,15 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReservationService {
 
-    private static final BigDecimal DEPOSIT_PERCENT = BigDecimal.valueOf(0.20); // coc 20% gia co ban (muc 8.2)
-
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
     private final ParkingSlotRepository slotRepository;
     private final BookingQuotaRepository bookingQuotaRepository;
     private final PricingPolicyRepository pricingPolicyRepository;
+    private final FeeConfigService feeConfigService;
+    private final PaymentRepository paymentRepository;
+    private final PayosService payosService;
 
     @Transactional
     public Reservation create(ReservationRequest request, String username) {
@@ -51,7 +54,8 @@ public class ReservationService {
                     "Bang gia cho loai xe nay chua duoc cau hinh (thieu gia co ban)",
                     "PRICING_NOT_CONFIGURED");
         }
-        BigDecimal deposit = policy.getBasePrice().multiply(DEPOSIT_PERCENT);
+        BigDecimal depositPercent = feeConfigService.getFeeConfig().getDepositPercent();
+        BigDecimal deposit = policy.getBasePrice().multiply(depositPercent);
 
         Reservation reservation = Reservation.builder()
                 .user(user)
@@ -103,15 +107,31 @@ public class ReservationService {
         return reservationRepository.findAll();
     }
 
+    @Transactional(readOnly = true)
     public List<Reservation> findMyReservations(String username) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
         return reservationRepository.findByUser_UserId(user.getUserId());
     }
 
+    @Transactional(readOnly = true)
     public Reservation findById(Long id) {
         return reservationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+    }
+
+    /**
+     * Lay thong tin booking theo ID, kiem tra quyen truy cap.
+     * Phai chay trong transaction de truy cap cac association lazy (user, vehicleType).
+     */
+    @Transactional(readOnly = true)
+    public ReservationDTO findByIdAsDto(Long id, String username, boolean isPrivileged) {
+        Reservation reservation = reservationRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+        if (!isPrivileged && !reservation.getUser().getUsername().equals(username)) {
+            throw new BusinessRuleException("Ban khong co quyen xem booking nay");
+        }
+        return ReservationDTO.from(reservation);
     }
 
     @Transactional
@@ -122,6 +142,15 @@ public class ReservationService {
         }
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
+        }
+        // 3-hour cancellation window chi ap dung cho driver tu huy - khong ap dung cho
+        // cac luong tu dong (scheduler no-show, cascade bao tri) goi thang cancelWithRefund.
+        long hoursUntilEntry = ChronoUnit.HOURS.between(
+                LocalDateTime.now(), reservation.getExpectedEntryTime());
+        if (hoursUntilEntry < 3) {
+            throw new BusinessRuleException(
+                    "Khong the huy booking trong vong 3 gio truoc gio vao",
+                    "CANCEL_TOO_LATE");
         }
         return cancelWithRefund(reservation, "Cancelled", true);
     }
@@ -157,8 +186,16 @@ public class ReservationService {
         if (!"Pending".equals(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong o trang thai cho thanh toan coc");
         }
-        reservation.setDepositStatus("Paid");
-        reservation.setStatus("Confirmed");
-        return reservationRepository.save(reservation);
+        
+        Payment payment = paymentRepository.findFirstByReservation_ReservationIdOrderByPaymentIdDesc(id)
+                .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich cho booking nay"));
+                
+        if (payment.getTransactionReference() == null) {
+            throw new BusinessRuleException("Giao dich khong co ma tham chieu (orderCode)");
+        }
+        
+        payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));
+        
+        return reservationRepository.findById(id).orElseThrow();
     }
 }

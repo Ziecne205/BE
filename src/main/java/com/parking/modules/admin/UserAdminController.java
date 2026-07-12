@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,6 +20,11 @@ public class UserAdminController {
 
     private final UserAdminService userAdminService;
 
+    @PostMapping
+    public ApiResponse<User> createUser(@Valid @RequestBody AdminUserCreationRequest request, Authentication auth) {
+        return ApiResponse.ok("Tao nguoi dung thanh cong", userAdminService.createUser(request, auth.getName()));
+    }
+
     @GetMapping
     public ApiResponse<List<User>> findAll() {
         return ApiResponse.ok(userAdminService.findAll());
@@ -30,13 +36,14 @@ public class UserAdminController {
     }
 
     @PatchMapping("/{id}/status")
-    public ApiResponse<User> updateStatus(@PathVariable Long id, @Valid @RequestBody UserStatusRequest request) {
-        return ApiResponse.ok("Cap nhat trang thai thanh cong", userAdminService.updateStatus(id, request.getStatus()));
+    public ApiResponse<User> updateStatus(@PathVariable Long id, @Valid @RequestBody UserStatusRequest request, Authentication auth) {
+        return ApiResponse.ok("Cap nhat trang thai thanh cong",
+                userAdminService.updateStatus(id, request.getStatus(), auth.getName()));
     }
 
     @PatchMapping("/{id}/reset-password")
-    public ApiResponse<Void> resetPassword(@PathVariable Long id, @RequestBody String newPassword) {
-        userAdminService.resetPassword(id, newPassword);
+    public ApiResponse<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request, Authentication auth) {
+        userAdminService.resetPassword(id, request.getNewPassword(), auth.getName());
         return ApiResponse.ok("Da reset mat khau", null);
     }
 }

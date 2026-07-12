@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -40,20 +41,22 @@ public class PricingPolicyController {
 
     @PostMapping
     @Operation(summary = "Tao chinh sach gia moi (tu dong Expired chinh sach cu cung loai xe)")
-    public ApiResponse<PricingPolicy> create(@Valid @RequestBody PricingPolicyRequest request) {
-        return ApiResponse.ok("Tao chinh sach gia thanh cong", pricingPolicyService.create(request));
+    public ApiResponse<PricingPolicy> create(@Valid @RequestBody PricingPolicyRequest request, Authentication auth) {
+        return ApiResponse.ok("Tao chinh sach gia thanh cong", pricingPolicyService.create(request, auth.getName()));
     }
 
     @PutMapping("/{id}")
     @Operation(summary = "Cap nhat chinh sach gia")
     public ApiResponse<PricingPolicy> update(@PathVariable Integer id,
-                                             @Valid @RequestBody PricingPolicyRequest request) {
-        return ApiResponse.ok("Cap nhat chinh sach gia thanh cong", pricingPolicyService.update(id, request));
+                                             @Valid @RequestBody PricingPolicyRequest request,
+                                             Authentication auth) {
+        return ApiResponse.ok("Cap nhat chinh sach gia thanh cong",
+                pricingPolicyService.update(id, request, auth.getName()));
     }
 
     @PatchMapping("/{id}/deactivate")
     @Operation(summary = "Huy kich hoat (Expired) mot chinh sach gia")
-    public ApiResponse<PricingPolicy> deactivate(@PathVariable Integer id) {
-        return ApiResponse.ok("Da huy kich hoat chinh sach gia", pricingPolicyService.deactivate(id));
+    public ApiResponse<PricingPolicy> deactivate(@PathVariable Integer id, Authentication auth) {
+        return ApiResponse.ok("Da huy kich hoat chinh sach gia", pricingPolicyService.deactivate(id, auth.getName()));
     }
 }

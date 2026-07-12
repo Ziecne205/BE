@@ -3,6 +3,7 @@ package com.parking.modules.staff;
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.entity.*;
+import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,7 +30,8 @@ public class SessionService {
      * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai
      * bai gui theo thang).
      */
-    private static final int OVERSTAY_GRACE_HOURS = 24;
+    private static final int OVERSTAY_GRACE_HOURS = 24; // We can still keep this static if the FE didn't want overstayGraceHours, or maybe not. Let's keep it static.
+
 
     private final ParkingSessionRepository sessionRepository;
     private final ParkingSlotRepository slotRepository;
@@ -40,6 +42,8 @@ public class SessionService {
     private final PaymentRepository paymentRepository;
     private final ParkingCardRepository parkingCardRepository;
     private final AuditLogRepository auditLogRepository;
+    private final FeeConfigService feeConfigService;
+    private final UserRepository userRepository;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) -
@@ -102,8 +106,14 @@ public class SessionService {
                 .findByVehicleType_VehicleTypeIdAndStatus(vehicleType.getVehicleTypeId(), "Available")
                 .stream().findFirst().orElse(null);
 
+        User driver = reservation != null ? reservation.getUser() : null;
+        if (driver == null && request.getDriverUserId() != null) {
+            driver = userRepository.findById(request.getDriverUserId()).orElse(null);
+        }
+
         ParkingSession session = ParkingSession.builder()
                 .reservation(reservation)
+                .driver(driver)
                 .licensePlateIn(request.getLicensePlate())
                 .entryImageUrl(request.getEntryImageUrl())
                 .vehicleType(vehicleType)
@@ -248,15 +258,19 @@ public class SessionService {
         }
 
         String paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
-        Payment payment = Payment.builder()
-                .session(session)
-                .reservation(session.getReservation())
-                .amount(amount)
-                .paymentMethod(paymentMethod)
-                .paymentTime(exitTime)
-                .paymentStatus("Success")
-                .build();
-        paymentRepository.save(payment);
+        boolean alreadyPaidOnline = paymentRepository.findBySession_SessionId(session.getSessionId())
+                .stream().anyMatch(p -> "Success".equals(p.getPaymentStatus()));
+        if (!alreadyPaidOnline) {
+            Payment payment = Payment.builder()
+                    .session(session)
+                    .reservation(session.getReservation())
+                    .amount(amount)
+                    .paymentMethod(paymentMethod)
+                    .paymentTime(exitTime)
+                    .paymentStatus("Success")
+                    .build();
+            paymentRepository.save(payment);
+        }
 
         AuditLog log = AuditLog.builder()
                 .action("STAFF_CHECK_OUT")
@@ -333,11 +347,10 @@ public class SessionService {
             amount = amount.add(policy.getLostTicketFee());
         }
         if (overstay) {
-            // Phu phi qua han: tinh them extraHourPrice cho moi gio vuot qua gia han (muc
-            // don gian,
-            // giu cung don vi/quy uoc voi phi gio them hien co).
+            // Phu phi qua han: su dung overstayRatePerHour cau hinh toan cuc thay vi extraHourPrice
             long overstayHours = hours - OVERSTAY_GRACE_HOURS;
-            amount = amount.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(overstayHours)));
+            BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
+            amount = amount.add(overstayRate.multiply(BigDecimal.valueOf(overstayHours)));
         }
         return amount;
     }
