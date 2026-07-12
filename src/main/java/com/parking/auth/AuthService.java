@@ -74,32 +74,6 @@ public class AuthService {
         return new LoginResponse(token, user.getUsername(), user.getRole().getRoleName());
     }
 
-    public LoginResponse register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.getUsername())) {
-            throw new BusinessRuleException("Username da ton tai");
-        }
-
-        // Force role Driver for all public registrations
-        Role role = roleRepository.findByRoleName("Driver")
-                .orElseThrow(() -> new BusinessRuleException("He thong chua cau hinh Role Driver"));
-
-        User user = User.builder()
-                .username(request.getUsername())
-                .passwordHash(passwordEncoder.encode(request.getPassword()))
-                .fullName(request.getFullName())
-                .phoneNumber(request.getPhoneNumber())
-                .email(request.getEmail())
-                .role(role)
-                .status("Active")
-                .createdAt(LocalDateTime.now())
-                .build();
-        userRepository.save(user);
-
-        UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
-        String token = jwtService.generateToken(userDetails);
-        return new LoginResponse(token, user.getUsername(), role.getRoleName());
-    }
-
     // ── Khoi phuc mat khau bang OTP — TACH 2 KENH theo vai tro ────────────────────────────────
     // Kenh KHACH (Driver): app tai xe (parking-driver) goi /auth/forgot-password + /auth/reset-password.
     // Kenh NOI BO (Staff/Manager/Admin): cong quan tri (parking-fe) goi /auth/staff/forgot-password +

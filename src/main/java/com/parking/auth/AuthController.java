@@ -30,11 +30,6 @@ public class AuthController {
         return ApiResponse.ok(authService.login(request));
     }
 
-    @PostMapping("/register")
-    public ApiResponse<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return ApiResponse.ok("Dang ky thanh cong", authService.register(request));
-    }
-
     /** Buoc 1 dang ky co xac thuc email: gui OTP toi email, chua tao tai khoan. */
     @PostMapping("/register/send-otp")
     public ApiResponse<String> sendRegisterOtp(@Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
