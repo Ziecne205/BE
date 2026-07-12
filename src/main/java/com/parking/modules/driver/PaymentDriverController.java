@@ -12,7 +12,11 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/driver/payments")
 @RequiredArgsConstructor
 @Tag(name = "Driver - Payments", description = "Thanh toan truc tuyen - phan he Khach hang")
-@PreAuthorize("hasRole('DRIVER')")
+// Khop voi ReservationController (hasAnyRole DRIVER/MANAGER/ADMIN): ai tao duoc booking thi
+// phai tra duoc coc. Truoc day chi DRIVER -> Manager/Admin tao booking xong bi 403 o buoc
+// thanh toan ("Ban khong co quyen thuc hien hanh dong nay"). Quyen so huu van duoc kiem tra
+// trong PayosService/PaymentDriverService (chi tra duoc cho booking/phien cua chinh minh).
+@PreAuthorize("hasAnyRole('DRIVER', 'MANAGER', 'ADMIN')")
 public class PaymentDriverController {
 
     private final PaymentDriverService paymentDriverService;
@@ -20,11 +24,16 @@ public class PaymentDriverController {
 
     @PostMapping("/payos/create-link")
     public ApiResponse<PayosLinkResponse> createPayosLink(@RequestBody PayosLinkRequest request, Authentication auth) {
-        if (!"DEPOSIT".equalsIgnoreCase(request.getType())) {
-            return ApiResponse.fail("Hien chi ho tro thanh toan coc (DEPOSIT)");
+        // DEPOSIT: id = reservationId (tien coc dat cho). PARKING: id = sessionId (phi gui xe phien dang do).
+        if ("DEPOSIT".equalsIgnoreCase(request.getType())) {
+            return ApiResponse.ok("Tao link PayOS thanh cong",
+                    payosService.createDepositLink(request.getId(), auth.getName()));
         }
-        return ApiResponse.ok("Tao link PayOS thanh cong",
-                payosService.createDepositLink(request.getId(), auth.getName()));
+        if ("PARKING".equalsIgnoreCase(request.getType())) {
+            return ApiResponse.ok("Tao link PayOS thanh cong",
+                    paymentDriverService.createParkingLink(request.getId(), auth.getName()));
+        }
+        return ApiResponse.fail("Loai thanh toan khong hop le (chi ho tro DEPOSIT hoac PARKING)");
     }
 
     @PostMapping("/checkout")

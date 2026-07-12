@@ -7,6 +7,7 @@ import com.parking.repository.*;
 import com.parking.modules.manager.FeeConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -32,7 +33,10 @@ public class ReservationService {
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
 
-    @Transactional
+    // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
+    // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
+    // luu luong thap nen chi phi khoa la chap nhan duoc; danh doi de giu dung bat bien suc chua.
+    @Transactional(isolation = Isolation.SERIALIZABLE)
     public Reservation create(ReservationRequest request, String username) {
         if (!request.getExpectedExitTime().isAfter(request.getExpectedEntryTime())) {
             throw new BusinessRuleException("Gio ra phai sau gio vao");
@@ -75,12 +79,14 @@ public class ReservationService {
      * Quota(W) theo loai xe, toan bai, tinh bang % cua C (muc 2). So sanh theo cua so thoi gian chong lan.
      */
     private void checkQuota(ReservationRequest request, VehicleType vehicleType) {
-        List<BookingQuota> quotas = bookingQuotaRepository.findAll();
+        // Chi lay quota cua dung loai xe (thay vi findAll roi loc trong bo nho).
+        // Loc theo khung gio van lam o Java vi so sanh LocalTime dang range kho dua vao query.
+        List<BookingQuota> quotas = bookingQuotaRepository
+                .findByVehicleType_VehicleTypeId(vehicleType.getVehicleTypeId());
         var entryTimeOfDay = request.getExpectedEntryTime().toLocalTime();
 
         BookingQuota applicable = quotas.stream()
                 .filter(q -> !Boolean.FALSE.equals(q.getIsActive())) // quota tat -> bo qua
-                .filter(q -> q.getVehicleType().getVehicleTypeId().equals(vehicleType.getVehicleTypeId()))
                 .filter(q -> !entryTimeOfDay.isBefore(q.getStartTime()) && entryTimeOfDay.isBefore(q.getEndTime()))
                 .findFirst().orElse(null);
 
@@ -143,8 +149,8 @@ public class ReservationService {
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
         }
-        // 3-hour cancellation window chi ap dung cho driver tu huy - khong ap dung cho
-        // cac luong tu dong (scheduler no-show, cascade bao tri) goi thang cancelWithRefund.
+        // Cua so huy 3 gio CHI ap dung cho driver tu huy — khong ap cho scheduler (no-show /
+        // het han coc) hay cascade bao tri, vi nhung luong do co the cham booking sat/qua gio vao.
         long hoursUntilEntry = ChronoUnit.HOURS.between(
                 LocalDateTime.now(), reservation.getExpectedEntryTime());
         if (hoursUntilEntry < 3) {
@@ -167,6 +173,8 @@ public class ReservationService {
     @Transactional
     public Reservation cancelWithRefund(Reservation reservation, String newStatus, boolean refund) {
         reservation.setStatus(newStatus);
+        // Neu da dong coc thi phan anh ket qua tai chinh: refund=true -> Refunded, forfeit -> Forfeited.
+        // (Hoan/mat coc thuc te do PayOS xu ly thu cong, o day chi cap nhat trang thai.)
         if ("Paid".equals(reservation.getDepositStatus())) {
             reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
         }

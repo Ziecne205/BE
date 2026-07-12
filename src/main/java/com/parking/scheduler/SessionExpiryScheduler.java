@@ -127,6 +127,24 @@ public class SessionExpiryScheduler {
         }
     }
 
+    /**
+     * Moi 5 phut: booking con "Pending" (chua thanh toan coc) qua cua so cho phep thanh toan
+     * (tinh tu createdAt) -> tu dong "Expired" de nha lai suc chua/quota dang bi giu. Cua so
+     * cau hinh qua SystemConfig key DEPOSIT_PAYMENT_WINDOW_MINUTES (mac dinh 15 phut).
+     */
+    @Scheduled(fixedDelay = 5 * 60 * 1000)
+    public void expireUnpaidReservations() {
+        int windowMinutes = feeConfigService.getFeeConfig().getDepositPaymentWindowMinutes();
+        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(windowMinutes);
+
+        List<Reservation> unpaid = reservationRepository.findByStatusAndCreatedAtBefore("Pending", cutoff);
+        for (Reservation reservation : unpaid) {
+            reservationService.cancelWithRefund(reservation, "Expired", false);
+            log.warn("Reservation {} auto-expired: deposit not paid within {} minutes",
+                    reservation.getReservationId(), windowMinutes);
+        }
+    }
+
     private void createIncident(ParkingSession session, String issueType, String description) {
         User reporter = systemReporter();
         if (reporter == null) {

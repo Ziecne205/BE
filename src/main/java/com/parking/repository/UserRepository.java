@@ -13,8 +13,22 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByUsername(@Param("username") String username);
     boolean existsByUsername(String username);
     boolean existsByEmail(String email);
+    Optional<User> findByEmail(String email);
 
-    /** Dung cho cac tien trinh he thong (vd: scheduler tao IncidentReport) can mot User "nguoi bao cao". */
-    @Query("SELECT u FROM User u JOIN u.role r WHERE r.roleName = :roleName ORDER BY u.userId ASC")
+    /**
+     * Dang nhap / khoi phuc mat khau bang MOT trong ba: username, email hoac so dien thoai.
+     * Tra ve List (thay vi Optional) de tranh NonUniqueResultException neu du lieu demo co
+     * trung cheo (vd username cua nguoi nay trung email cua nguoi khac); caller lay ban ghi dau.
+     */
+    @Query("SELECT u FROM User u JOIN FETCH u.role r "
+            + "WHERE u.username = :id OR u.email = :id OR u.phoneNumber = :id ORDER BY u.userId ASC")
+    List<User> findByUsernameOrEmailOrPhone(@Param("id") String id);
+
+    /**
+     * Dung cho cac tien trinh he thong (vd: scheduler tao IncidentReport) can mot User "nguoi bao cao".
+     * So sanh khong phan biet hoa/thuong vi ten role trong DB co the la "Admin" trong khi
+     * cho goi truyen "ADMIN" — tranh scheduler khong tim thay nguoi bao cao va am tham bo qua.
+     */
+    @Query("SELECT u FROM User u JOIN u.role r WHERE UPPER(r.roleName) = UPPER(:roleName) ORDER BY u.userId ASC")
     List<User> findByRole_RoleNameOrderByUserIdAsc(@Param("roleName") String roleName);
 }

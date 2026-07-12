@@ -1,10 +1,14 @@
 package com.parking.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
 @Table(name = "VehicleTypes")
+// Khi entity nay xuat hien long nhau (vd PricingPolicy.vehicleType) sau mot lan merge,
+// Hibernate tra ve proxy — bo qua noi that cua proxy de Jackson serialize field that.
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 @Getter
 @Setter
 @NoArgsConstructor

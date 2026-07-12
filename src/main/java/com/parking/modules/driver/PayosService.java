@@ -10,9 +10,12 @@ import com.parking.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -50,7 +53,16 @@ public class PayosService {
 
     private final ReservationRepository reservationRepository;
     private final PaymentRepository paymentRepository;
-    private final RestTemplate restTemplate = new RestTemplate();
+    // Timeout ket noi/doc bat buoc: khong de mot lan goi PayOS treo vo han giu ket noi DB
+    // (cac phuong thuc goi PayOS deu chay trong @Transactional).
+    private final RestTemplate restTemplate = buildRestTemplate();
+
+    private static RestTemplate buildRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout((int) Duration.ofSeconds(5).toMillis());
+        factory.setReadTimeout((int) Duration.ofSeconds(10).toMillis());
+        return new RestTemplate(factory);
+    }
 
     @Transactional
     public PayosLinkResponse createDepositLink(Long reservationId, String username) {
@@ -86,6 +98,21 @@ public class PayosService {
                 .build());
 
         return resp;
+    }
+
+    /**
+     * Tao link/QR PayOS cho MOT so tien bat ky (dung cho phi gui xe dong tai cong ra — staff).
+     * Ban than ham chi goi PayOS; caller (SessionService.createFeeLink) chiu trach nhiem luu
+     * Payment "Pending" theo orderCode de webhook/polling doi chieu khi khach thanh toan, va de
+     * check-out nhan ra phien da tra online (tranh thu phi 2 lan). Tai khoan nhan (PayOS keys) khong doi.
+     */
+    public PayosLinkResponse createLinkForAmount(long refId, long amount, String description) {
+        if (clientId == null || clientId.isBlank()) {
+            throw new BusinessRuleException("PayOS chua duoc cau hinh (thieu key)", "PAYOS_NOT_CONFIGURED");
+        }
+        long safeAmount = amount < 1000 ? 2000 : amount; // PayOS yeu cau so tien toi thieu
+        long orderCode = buildOrderCode(refId);
+        return callCreatePaymentLink(orderCode, safeAmount, truncate(description, 25));
     }
 
     private PayosLinkResponse callCreatePaymentLink(long orderCode, long amount, String description) {
@@ -145,6 +172,14 @@ public class PayosService {
         }
 
         String orderCode = data.path("orderCode").asText();
+        markPaymentPaid(orderCode);
+    }
+
+    /**
+     * Danh dau giao dich da thanh toan + xac nhan coc cho reservation (idempotent: bo qua neu
+     * da Success). Dung chung boi webhook (handleWebhook) va polling (verifyPaymentStatus).
+     */
+    private void markPaymentPaid(String orderCode) {
         paymentRepository.findFirstByTransactionReference(orderCode).ifPresent(payment -> {
             if ("Success".equals(payment.getPaymentStatus())) {
                 return; // da xu ly
@@ -185,21 +220,7 @@ public class PayosService {
         String status = data.path("status").asText();
 
         if ("PAID".equals(status)) {
-            paymentRepository.findFirstByTransactionReference(String.valueOf(orderCode)).ifPresent(payment -> {
-                if ("Success".equals(payment.getPaymentStatus())) {
-                    return;
-                }
-                payment.setPaymentStatus("Success");
-                payment.setPaymentTime(LocalDateTime.now());
-                paymentRepository.save(payment);
-
-                Reservation r = payment.getReservation();
-                if (r != null && "Pending".equals(r.getStatus())) {
-                    r.setDepositStatus("Paid");
-                    r.setStatus("Confirmed");
-                    reservationRepository.save(r);
-                }
-            });
+            markPaymentPaid(String.valueOf(orderCode));
         } else {
             throw new BusinessRuleException("Giao dich nay chua duoc thanh toan (trang thai PayOS: " + status + ")", "PAYMENT_NOT_PAID");
         }

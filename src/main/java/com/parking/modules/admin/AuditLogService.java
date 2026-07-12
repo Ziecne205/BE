@@ -1,8 +1,12 @@
 package com.parking.modules.admin;
 
+import com.parking.common.PageResponse;
 import com.parking.entity.AuditLog;
 import com.parking.repository.AuditLogRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,10 +20,16 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class AuditLogService {
 
+    private static final int MAX_PAGE_SIZE = 100;
+
     private final AuditLogRepository auditLogRepository;
 
-    public List<AuditLog> findAll() {
-        return auditLogRepository.findAllByOrderByCreatedAtDesc();
+    /** Man "xem toan bo": phan trang, moi nhat truoc. size gioi han de tranh payload qua lon. */
+    public PageResponse<AuditLog> findAll(int page, int size) {
+        int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
+        int safePage = Math.max(page, 0);
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by("createdAt").descending());
+        return PageResponse.of(auditLogRepository.findAll(pageable));
     }
 
     public List<AuditLog> findByAction(String action) {

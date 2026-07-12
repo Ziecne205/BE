@@ -21,4 +21,6 @@ public class ActiveSessionDto {
     private boolean hasReservation;
     private boolean hasCard;
     private long parkedMinutes;
+    /** Phi tam tinh theo bang gia hien hanh cho thoi luong da do den hien tai (null neu chua co bang gia). */
+    private java.math.BigDecimal estimatedFee;
 }

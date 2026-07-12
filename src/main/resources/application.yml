@@ -25,6 +25,22 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:khointnse180532@fpt.edu.vn}
+    password: ${MAIL_PASSWORD:dvak avio wmes htey}
+    protocol: smtps
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+        smtps:
+          auth: true
 
 springdoc:
   swagger-ui:
@@ -35,13 +51,25 @@ springdoc:
     path: /api-docs
 
 app:
+  # URL goc cua FE, dung de dung link dat lai mat khau trong email.
+  frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  cors:
+    # Danh sach origin FE duoc phep (phan cach bang dau phay). KHONG dung "*" o production.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:5173}
   jwt:
-    secret: change-this-secret-to-a-long-random-string-in-production-min-32-chars
-    expiration-ms: 86400000 # 24h
+    secret: ${APP_JWT_SECRET:change-this-secret-to-a-long-random-string-in-production-min-32-chars}
+    # 8h. JWT stateless nen khong the thu hoi truoc han — vong doi du dai de phien lam viec
+    # trong ngay khong het han giua chung, van gioi han cua so rui ro neu token bi lo
+    # (logout chi xoa token phia client). Chinh qua APP_JWT_EXPIRATION_MS.
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:28800000}
 
 payos:
   client-id: ${PAYOS_CLIENT_ID:}
   api-key: ${PAYOS_API_KEY:}
   checksum-key: ${PAYOS_CHECKSUM_KEY:}
-  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/driver/my-bookings}
-  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/driver/book}
+  # PHAI tro ve /driver/payment/return — trang nay goi confirm-deposit (verify voi PayOS) de flip
+  # reservation Pending -> Confirmed va danh dau Payment = Success. Neu tro thang ve /driver/my-bookings
+  # thi buoc xac nhan bi BO QUA, coc ket o Pending mai (webhook PayOS khong goi duoc vao localhost).
+  # PORT phai khop cong app parking-driver dang chay.
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3001/driver/payment/return}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3001/driver/payment/return?cancel=true}
