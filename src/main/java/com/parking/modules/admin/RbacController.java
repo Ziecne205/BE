@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -49,19 +50,25 @@ public class RbacController {
     @PutMapping("/roles/{roleId}/permissions")
     @Operation(summary = "Gan toan bo quyen han cho vai tro (ghi de)")
     public ApiResponse<Role> assignPermissions(@PathVariable Integer roleId,
-                                                @Valid @RequestBody RolePermissionRequest request) {
-        return ApiResponse.ok("Gan quyen thanh cong", rbacService.assignPermissions(roleId, request.getPermissionIds()));
+                                                @Valid @RequestBody RolePermissionRequest request,
+                                                Authentication auth) {
+        return ApiResponse.ok("Gan quyen thanh cong",
+                rbacService.assignPermissions(roleId, request.getPermissionIds(), auth.getName()));
     }
 
     @PostMapping("/roles/{roleId}/permissions/{permissionId}")
     @Operation(summary = "Them mot quyen han vao vai tro")
-    public ApiResponse<Role> addPermission(@PathVariable Integer roleId, @PathVariable Integer permissionId) {
-        return ApiResponse.ok("Them quyen thanh cong", rbacService.addPermission(roleId, permissionId));
+    public ApiResponse<Role> addPermission(@PathVariable Integer roleId, @PathVariable Integer permissionId,
+                                            Authentication auth) {
+        return ApiResponse.ok("Them quyen thanh cong",
+                rbacService.addPermission(roleId, permissionId, auth.getName()));
     }
 
     @DeleteMapping("/roles/{roleId}/permissions/{permissionId}")
     @Operation(summary = "Xoa mot quyen han khoi vai tro")
-    public ApiResponse<Role> removePermission(@PathVariable Integer roleId, @PathVariable Integer permissionId) {
-        return ApiResponse.ok("Xoa quyen thanh cong", rbacService.removePermission(roleId, permissionId));
+    public ApiResponse<Role> removePermission(@PathVariable Integer roleId, @PathVariable Integer permissionId,
+                                               Authentication auth) {
+        return ApiResponse.ok("Xoa quyen thanh cong",
+                rbacService.removePermission(roleId, permissionId, auth.getName()));
     }
 }

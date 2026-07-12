@@ -17,7 +17,6 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class FeedbackDriverService {
 
     private final FeedbackRepository feedbackRepository;

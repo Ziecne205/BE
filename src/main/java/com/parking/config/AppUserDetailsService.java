@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@SuppressWarnings("null")
 public class AppUserDetailsService implements UserDetailsService {
 
     private final UserRepository userRepository;

@@ -10,7 +10,6 @@ import com.parking.repository.RoleRepository;
 import com.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -30,7 +29,6 @@ import com.parking.repository.PasswordResetTokenRepository;
 @RequiredArgsConstructor
 @Slf4j
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class AuthService {
 
     private static final int OTP_TTL_MINUTES = 10;

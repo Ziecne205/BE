@@ -3,7 +3,6 @@ package com.parking.auth;
 import com.parking.config.AppUserDetailsService;
 import com.parking.config.JwtService;
 import com.parking.entity.Role;
-import com.parking.entity.User;
 import com.parking.repository.RoleRepository;
 import com.parking.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;

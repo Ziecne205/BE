@@ -1,6 +1,7 @@
 package com.parking.modules.admin;
 
 import com.parking.common.exception.ResourceNotFoundException;
+import com.parking.common.service.AuditLogWriter;
 import com.parking.entity.User;
 import com.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -16,17 +17,18 @@ import com.parking.repository.RoleRepository;
 
 /**
  * Vi du CRUD cho phan he Quan tri vien (Admin) - User Management.
- * RBAC (Permissions/RolePermissions), AuditLog, SystemConfig lam theo cung pattern nay.
+ * RBAC (Permissions/RolePermissions), AuditLog, SystemConfig lam theo cung
+ * pattern nay.
  */
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class UserAdminService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditLogWriter auditLogService;
 
     public List<User> findAll() {
         return userRepository.findAll();
@@ -37,21 +39,27 @@ public class UserAdminService {
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user #" + id));
     }
 
-    public User updateStatus(Long id, String status) {
+    public User updateStatus(Long id, String status, String actorUsername) {
         User user = findById(id);
         user.setStatus(status);
         user.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        auditLogService.log(actorUsername, "ADMIN_UPDATE_USER_STATUS", "User", String.valueOf(id),
+                "Doi trang thai user " + user.getUsername() + " -> " + status);
+        return saved;
     }
 
-    public User resetPassword(Long id, String newPassword) {
+    public User resetPassword(Long id, String newPassword, String actorUsername) {
         User user = findById(id);
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(LocalDateTime.now());
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        auditLogService.log(actorUsername, "ADMIN_RESET_PASSWORD", "User", String.valueOf(id),
+                "Reset mat khau cho user " + user.getUsername());
+        return saved;
     }
-    
-    public User createUser(AdminUserCreationRequest request) {
+
+    public User createUser(AdminUserCreationRequest request, String actorUsername) {
         if (userRepository.existsByUsername(request.getUsername())) {
             throw new BusinessRuleException("Username da ton tai");
         }
@@ -70,6 +78,9 @@ public class UserAdminService {
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        auditLogService.log(actorUsername, "ADMIN_CREATE_USER", "User", String.valueOf(saved.getUserId()),
+                "Tao user moi " + saved.getUsername() + " (role " + role.getRoleName() + ")");
+        return saved;
     }
 }

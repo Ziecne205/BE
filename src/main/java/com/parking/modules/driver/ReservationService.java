@@ -21,7 +21,6 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class ReservationService {
 
     private final ReservationRepository reservationRepository;

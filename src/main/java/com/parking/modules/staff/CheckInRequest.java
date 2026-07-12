@@ -19,6 +19,9 @@ public class CheckInRequest {
     private Integer entryGateId;
 
     private String entryImageUrl;
-    
+
     private Long reservationId;
+
+    /** Neu khach da dang nhap app va check-in walk-in (khong dat cho truoc). */
+    private Long driverUserId;
 }

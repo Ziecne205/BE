@@ -9,7 +9,7 @@ import lombok.Setter;
 @Setter
 public class ResetPasswordRequest {
 
-    @NotBlank
-    @Size(min = 6, max = 50)
+    @NotBlank(message = "Mat khau moi khong duoc trong")
+    @Size(min = 6, max = 100, message = "Mat khau moi phai co it nhat 6 ky tu")
     private String newPassword;
 }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.entity.Payment;
-import com.parking.entity.Reservation;
 import com.parking.repository.PaymentRepository;
 import com.parking.repository.ReservationRepository;
 import org.junit.jupiter.api.BeforeEach;

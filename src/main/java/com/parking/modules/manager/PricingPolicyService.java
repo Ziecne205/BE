@@ -1,6 +1,7 @@
 package com.parking.modules.manager;
 
 import com.parking.common.exception.ResourceNotFoundException;
+import com.parking.common.service.AuditLogWriter;
 import com.parking.entity.PricingPolicy;
 import com.parking.entity.VehicleType;
 import com.parking.repository.PricingPolicyRepository;
@@ -19,11 +20,11 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class PricingPolicyService {
 
     private final PricingPolicyRepository pricingPolicyRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
+    private final AuditLogWriter auditLogService;
 
     public List<PricingPolicy> findAll() {
         return pricingPolicyRepository.findAll();
@@ -39,9 +40,10 @@ public class PricingPolicyService {
     }
 
     @Transactional
-    public PricingPolicy create(PricingPolicyRequest request) {
+    public PricingPolicy create(PricingPolicyRequest request, String actorUsername) {
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         // Expired tat ca chinh sach cu cung loai xe
         List<PricingPolicy> oldPolicies = pricingPolicyRepository
@@ -59,14 +61,19 @@ public class PricingPolicyService {
                 .effectiveDate(request.getEffectiveDate())
                 .status("Active")
                 .build();
-        return pricingPolicyRepository.save(policy);
+        PricingPolicy saved = pricingPolicyRepository.save(policy);
+        auditLogService.log(actorUsername, "MANAGER_CREATE_PRICING_POLICY", "PricingPolicy",
+                String.valueOf(saved.getPolicyId()),
+                "Tao bang gia moi cho " + vt.getTypeName() + ": basePrice=" + saved.getBasePrice());
+        return saved;
     }
 
     @Transactional
-    public PricingPolicy update(Integer id, PricingPolicyRequest request) {
+    public PricingPolicy update(Integer id, PricingPolicyRequest request, String actorUsername) {
         PricingPolicy policy = findById(id);
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         policy.setVehicleType(vt);
         policy.setBasePrice(request.getBasePrice());
@@ -75,13 +82,19 @@ public class PricingPolicyService {
         policy.setNightSurcharge(request.getNightSurcharge());
         policy.setLostTicketFee(request.getLostTicketFee());
         policy.setEffectiveDate(request.getEffectiveDate());
-        return pricingPolicyRepository.save(policy);
+        PricingPolicy saved = pricingPolicyRepository.save(policy);
+        auditLogService.log(actorUsername, "MANAGER_UPDATE_PRICING_POLICY", "PricingPolicy", String.valueOf(id),
+                "Cap nhat bang gia #" + id + " cho " + vt.getTypeName() + ": basePrice=" + saved.getBasePrice());
+        return saved;
     }
 
     @Transactional
-    public PricingPolicy deactivate(Integer id) {
+    public PricingPolicy deactivate(Integer id, String actorUsername) {
         PricingPolicy policy = findById(id);
         policy.setStatus("Expired");
-        return pricingPolicyRepository.save(policy);
+        PricingPolicy saved = pricingPolicyRepository.save(policy);
+        auditLogService.log(actorUsername, "MANAGER_DEACTIVATE_PRICING_POLICY", "PricingPolicy", String.valueOf(id),
+                "Huy kich hoat bang gia #" + id);
+        return saved;
     }
 }

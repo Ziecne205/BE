@@ -24,16 +24,18 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class SessionService {
 
     private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");
     private static final List<String> OUTSTANDING_RESERVATION_STATUSES = List.of("Confirmed");
 
     /**
-     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay). PricingPolicy chua co
-     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la qua han).
-     * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai bai gui theo thang).
+     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay).
+     * PricingPolicy chua co
+     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la
+     * qua han).
+     * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai
+     * bai gui theo thang).
      */
     private static final int OVERSTAY_GRACE_HOURS = 24; // We can still keep this static if the FE didn't want overstayGraceHours, or maybe not. Let's keep it static.
 
@@ -48,13 +50,16 @@ public class SessionService {
     private final ParkingCardRepository parkingCardRepository;
     private final AuditLogRepository auditLogRepository;
     private final FeeConfigService feeConfigService;
+    private final UserRepository userRepository;
     private final PricingService pricingService;
     private final PayosService payosService;
     private final PlatformTransactionManager txManager;
 
     /**
-     * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) - Outstanding(t).
-     * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc vao.
+     * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) -
+     * Outstanding(t).
+     * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc
+     * vao.
      */
     // SERIALIZABLE: tinh headroom (capacity - inside - outstanding) va tao session phai nguyen tu,
     // neu khong 2 walk-in dong thoi co the cung vuot suc chua (phantom read tren Sessions/Reservations).
@@ -67,7 +72,7 @@ public class SessionService {
 
         LocalDateTime now = LocalDateTime.now();
         Reservation reservation = null;
-        
+
         if (request.getReservationId() != null) {
             reservation = reservationRepository.findById(request.getReservationId()).orElse(null);
             if (reservation != null && !OUTSTANDING_RESERVATION_STATUSES.contains(reservation.getStatus())) {
@@ -78,7 +83,8 @@ public class SessionService {
         if (reservation == null && request.getLicensePlate() != null && !request.getLicensePlate().isBlank()) {
             List<Reservation> activeReservations = reservationRepository
                     .findByLicensePlateAndVehicleType_VehicleTypeIdAndStatusInAndExpectedExitTimeGreaterThanEqual(
-                            request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES, now);
+                            request.getLicensePlate(), vehicleType.getVehicleTypeId(), OUTSTANDING_RESERVATION_STATUSES,
+                            now);
             if (!activeReservations.isEmpty()) {
                 reservation = activeReservations.get(0);
             }
@@ -112,8 +118,14 @@ public class SessionService {
                 .findByVehicleType_VehicleTypeIdAndStatus(vehicleType.getVehicleTypeId(), "Available")
                 .stream().findFirst().orElse(null);
 
+        User driver = reservation != null ? reservation.getUser() : null;
+        if (driver == null && request.getDriverUserId() != null) {
+            driver = userRepository.findById(request.getDriverUserId()).orElse(null);
+        }
+
         ParkingSession session = ParkingSession.builder()
                 .reservation(reservation)
+                .driver(driver)
                 .licensePlateIn(request.getLicensePlate())
                 .entryImageUrl(request.getEntryImageUrl())
                 .vehicleType(vehicleType)
@@ -130,7 +142,8 @@ public class SessionService {
                 .action("STAFF_CHECK_IN")
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
-                .detail("Staff checked in vehicle: " + request.getLicensePlate() + (reservation != null ? " with booking" : " as walk-in"))
+                .detail("Staff checked in vehicle: " + request.getLicensePlate()
+                        + (reservation != null ? " with booking" : " as walk-in"))
                 .createdAt(now)
                 .build();
         auditLogRepository.save(log);
@@ -146,8 +159,10 @@ public class SessionService {
     }
 
     /**
-     * Cho vao thu cong khi bien so quet duoc tai cong khong khop voi booking/phien hien tai.
-     * Cap nhat lai bien so thuc te tren phien, danh dau isForceCheckIn=true va ghi audit log
+     * Cho vao thu cong khi bien so quet duoc tai cong khong khop voi booking/phien
+     * hien tai.
+     * Cap nhat lai bien so thuc te tren phien, danh dau isForceCheckIn=true va ghi
+     * audit log
      * (cung pattern voi STAFF_CHECK_IN/STAFF_CHECK_OUT).
      */
     @Transactional
@@ -178,7 +193,8 @@ public class SessionService {
                 .detail("Staff force checked-in vehicle: plate changed from " + previousPlate
                         + " to " + request.getActualPlate()
                         + (request.getReason() != null && !request.getReason().isBlank()
-                                ? " | reason: " + request.getReason() : ""))
+                                ? " | reason: " + request.getReason()
+                                : ""))
                 .createdAt(now)
                 .build();
         auditLogRepository.save(log);
@@ -213,7 +229,8 @@ public class SessionService {
         // is only known at the gate — so what the customer was quoted matches what we charge.
         BigDecimal amount = computeFee(policy, session, exitTime, lostTicket);
         BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
-                ? policy.getLostTicketFee() : BigDecimal.ZERO;
+                ? policy.getLostTicketFee()
+                : BigDecimal.ZERO;
 
         boolean plateMismatch = !session.getLicensePlateIn().equalsIgnoreCase(request.getLicensePlate());
 
@@ -375,7 +392,8 @@ public class SessionService {
     public ActiveSessionDto searchActiveByPlate(String licensePlate) {
         ParkingSession session = sessionRepository
                 .findFirstByLicensePlateInAndStatusIn(licensePlate, OPEN_SESSION_STATUSES)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so: " + licensePlate));
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "Khong tim thay phien dang mo cho bien so: " + licensePlate));
         return toActiveSessionDto(session, LocalDateTime.now());
     }
 

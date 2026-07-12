@@ -28,14 +28,14 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * Tich hop PayOS goi thang REST API (khong dung SDK de tranh phu thuoc version).
+ * Tich hop PayOS goi thang REST API (khong dung SDK de tranh phu thuoc
+ * version).
  * - createDepositLink: tao link + QR cho tien coc dat cho.
  * - handleWebhook: PayOS goi ve khi thanh toan xong -> xac nhan coc.
  * Doc: https://payos.vn/docs/api/
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class PayosService {
 
     private static final String CREATE_URL = "https://api-merchant.payos.vn/v2/payment-requests";
@@ -237,7 +237,8 @@ public class PayosService {
         }
         StringBuilder sb = new StringBuilder();
         for (Map.Entry<String, String> e : sorted.entrySet()) {
-            if (sb.length() > 0) sb.append('&');
+            if (sb.length() > 0)
+                sb.append('&');
             sb.append(e.getKey()).append('=').append(e.getValue());
         }
         return hmacSha256(sb.toString(), checksumKey);
@@ -249,7 +250,8 @@ public class PayosService {
             mac.init(new SecretKeySpec(key.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
             byte[] hash = mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder(hash.length * 2);
-            for (byte b : hash) sb.append(String.format("%02x", b));
+            for (byte b : hash)
+                sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             throw new IllegalStateException("Loi tinh HMAC", e);

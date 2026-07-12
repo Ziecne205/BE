@@ -14,12 +14,13 @@ import java.util.List;
 
 /**
  * Quan ly Booking Quota - tran so luong dat cho theo khung gio - Phan he 1.
- * Theo Business-Flow muc 2.3: Quota(W) = % suc chua, tinh theo loai xe tren toan bai.
- * Manager dat muc nay, khi dat cho dat tran -> khong cho dat them (tru Manager override).
+ * Theo Business-Flow muc 2.3: Quota(W) = % suc chua, tinh theo loai xe tren
+ * toan bai.
+ * Manager dat muc nay, khi dat cho dat tran -> khong cho dat them (tru Manager
+ * override).
  */
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class BookingQuotaService {
 
     private final BookingQuotaRepository bookingQuotaRepository;
@@ -44,7 +45,8 @@ public class BookingQuotaService {
             throw new BusinessRuleException("Gio ket thuc phai sau gio bat dau");
         }
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         BookingQuota quota = BookingQuota.builder()
                 .vehicleType(vt)
@@ -70,7 +72,8 @@ public class BookingQuotaService {
         }
         BookingQuota quota = findById(id);
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
         quota.setVehicleType(vt);
         quota.setStartTime(request.getStartTime());
         quota.setEndTime(request.getEndTime());

@@ -18,7 +18,6 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-@SuppressWarnings("null")
 public class AuditLogService {
 
     private static final int MAX_PAGE_SIZE = 100;

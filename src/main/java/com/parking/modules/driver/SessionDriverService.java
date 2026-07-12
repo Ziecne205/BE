@@ -21,13 +21,12 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class SessionDriverService {
 
-    private final ParkingSessionRepository sessionRepository;
-    private final UserRepository userRepository;
-    private final PricingService pricingService;
-    private final PaymentRepository paymentRepository;
+        private final ParkingSessionRepository sessionRepository;
+        private final UserRepository userRepository;
+        private final PricingService pricingService;
+        private final PaymentRepository paymentRepository;
 
     public List<ParkingSessionDTO> getCurrentSessions(String username) {
         User user = userRepository.findByUsername(username)

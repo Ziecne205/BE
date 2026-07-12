@@ -27,7 +27,6 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 @Slf4j
 public class ParkingSlotService {
 
@@ -62,7 +61,8 @@ public class ParkingSlotService {
         Floor floor = floorRepository.findById(request.getFloorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay tang #" + request.getFloorId()));
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
 
         ParkingSlot slot = ParkingSlot.builder()
                 .floor(floor)
@@ -80,7 +80,8 @@ public class ParkingSlotService {
         Floor floor = floorRepository.findById(request.getFloorId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay tang #" + request.getFloorId()));
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Khong tim thay loai xe #" + request.getVehicleTypeId()));
         slot.setFloor(floor);
         slot.setZone(request.getZone());
         slot.setSlotCode(request.getSlotCode());
@@ -108,25 +109,36 @@ public class ParkingSlotService {
     }
 
     /**
-     * "Capacity-crash cascade": khi mot o chuyen sang Maintenance, suc chua kha dung cho loai xe
-     * do co the tut xuong duoi Inside(t) + Outstanding(t) — nghia la co booking dang giu cho
+     * "Capacity-crash cascade": khi mot o chuyen sang Maintenance, suc chua kha
+     * dung cho loai xe
+     * do co the tut xuong duoi Inside(t) + Outstanding(t) — nghia la co booking
+     * dang giu cho
      * (Confirmed) khong con o de phuc vu du xe da vao lan xe se den. Xu ly:
-     * (a) Chan khach vang lai moi cho loai xe nay: da co san trong SessionService.checkIn — headroom
-     *     duoc tinh lai tu countByVehicleType_..._StatusNot(vehicleTypeId, "Maintenance"), nen o vua
-     *     chuyen Maintenance se tu dong bi loai khoi capacity ngay lan check-in tiep theo.
-     * (b) Huy + hoan coc cho cac booking Outstanding vuot qua suc chua moi, tai su dung
-     *     ReservationService.cancelWithRefund(refund=true) thay vi viet lai logic hoan coc.
-     * Chien luoc chon booking de huy (assumption, spec khong noi ro): huy booking MOI TAO GAN
-     * DAY NHAT truoc (findByVehicleType_..._OrderByCreatedAtDesc) — uu tien giu cac booking cu hon
+     * (a) Chan khach vang lai moi cho loai xe nay: da co san trong
+     * SessionService.checkIn — headroom
+     * duoc tinh lai tu countByVehicleType_..._StatusNot(vehicleTypeId,
+     * "Maintenance"), nen o vua
+     * chuyen Maintenance se tu dong bi loai khoi capacity ngay lan check-in tiep
+     * theo.
+     * (b) Huy + hoan coc cho cac booking Outstanding vuot qua suc chua moi, tai su
+     * dung
+     * ReservationService.cancelWithRefund(refund=true) thay vi viet lai logic hoan
+     * coc.
+     * Chien luoc chon booking de huy (assumption, spec khong noi ro): huy booking
+     * MOI TAO GAN
+     * DAY NHAT truoc (findByVehicleType_..._OrderByCreatedAtDesc) — uu tien giu cac
+     * booking cu hon
      * (khach da cho lau hon, cong bang hon voi nguoi dat truoc).
      */
     private void cascadeCapacityCrash(VehicleType vehicleType) {
         Integer vehicleTypeId = vehicleType.getVehicleTypeId();
         long capacity = slotRepository.countByVehicleType_VehicleTypeIdAndStatusNot(vehicleTypeId, "Maintenance");
-        long inside = sessionRepository.countByVehicleType_VehicleTypeIdAndStatusIn(vehicleTypeId, OPEN_SESSION_STATUSES);
+        long inside = sessionRepository.countByVehicleType_VehicleTypeIdAndStatusIn(vehicleTypeId,
+                OPEN_SESSION_STATUSES);
 
         List<Reservation> outstanding = reservationRepository
-                .findByVehicleType_VehicleTypeIdAndStatusInOrderByCreatedAtDesc(vehicleTypeId, OUTSTANDING_RESERVATION_STATUSES);
+                .findByVehicleType_VehicleTypeIdAndStatusInOrderByCreatedAtDesc(vehicleTypeId,
+                        OUTSTANDING_RESERVATION_STATUSES);
 
         long deficit = (inside + outstanding.size()) - capacity;
         if (deficit <= 0) {

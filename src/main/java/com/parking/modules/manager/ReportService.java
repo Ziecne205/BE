@@ -29,7 +29,6 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class ReportService {
 
     private final ParkingSessionRepository sessionRepository;
@@ -46,7 +45,8 @@ public class ReportService {
         LocalDateTime to = toDate.atTime(LocalTime.MAX);
 
         BigDecimal totalRevenue = paymentRepository.sumRevenueByPeriod(from, to);
-        if (totalRevenue == null) totalRevenue = BigDecimal.ZERO;
+        if (totalRevenue == null)
+            totalRevenue = BigDecimal.ZERO;
 
         List<ParkingSession> completedSessions = sessionRepository
                 .findByStatusAndEntryTimeBetween("Completed", from, to);
@@ -86,8 +86,7 @@ public class ReportService {
         Map<Integer, Long> byHour = allSessions.stream()
                 .collect(Collectors.groupingBy(
                         s -> s.getEntryTime().getHour(),
-                        Collectors.counting()
-                ));
+                        Collectors.counting()));
 
         int peakHour = byHour.entrySet().stream()
                 .max(Comparator.comparingLong(Map.Entry::getValue))
@@ -120,7 +119,8 @@ public class ReportService {
         Map<LocalDate, BigDecimal> revenueByDay = new TreeMap<>();
         Map<LocalDate, Long> sessionsByDay = new TreeMap<>();
         for (Payment p : paymentRepository.findByPaymentTimeBetween(from, to)) {
-            if (!"Success".equals(p.getPaymentStatus()) || p.getPaymentTime() == null) continue;
+            if (!"Success".equals(p.getPaymentStatus()) || p.getPaymentTime() == null)
+                continue;
             LocalDate day = p.getPaymentTime().toLocalDate();
             revenueByDay.merge(day, p.getAmount() == null ? BigDecimal.ZERO : p.getAmount(), BigDecimal::add);
             sessionsByDay.merge(day, 1L, Long::sum);
@@ -137,7 +137,8 @@ public class ReportService {
     }
 
     /**
-     * Phan bo luu luong theo khung 2 gio (profile mot ngay dien hinh gom ca khoang).
+     * Phan bo luu luong theo khung 2 gio (profile mot ngay dien hinh gom ca
+     * khoang).
      * inside = cong don (entries - exits) qua cac khung.
      */
     public List<ReportSeries.OccupancyWindow> getOccupancyHourly(LocalDate fromDate, LocalDate toDate) {

@@ -24,7 +24,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
-@SuppressWarnings("null")
 public class PaymentDriverService {
 
     private static final List<String> PAYABLE_STATUSES = List.of("Admitted", "Parked", "Moved");
@@ -109,12 +108,11 @@ public class PaymentDriverService {
 
         paymentRepository.save(payment);
 
-        if ("Success".equalsIgnoreCase(status)) {
-            session.setStatus("Completed");
-            session.setExitTime(LocalDateTime.now());
-            sessionRepository.save(session);
-        }
-
+        // Luu y: KHONG dong phien / giai phong slot o day. Xe co the da tra tien
+        // online nhung van chua roi bai vat ly - phien chi thuc su Completed va
+        // slot chi duoc giai phong khi bao ve quet the check-out tai cong
+        // (SessionService.checkOut), de tranh 2 luong (thanh toan online va
+        // check-out cong) giam sat state khong dong bo.
         return payment;
     }
 

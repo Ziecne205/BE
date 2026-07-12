@@ -16,7 +16,6 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @org.springframework.transaction.annotation.Transactional
-@SuppressWarnings("null")
 public class IncidentService {
 
     private final IncidentReportRepository incidentRepository;
