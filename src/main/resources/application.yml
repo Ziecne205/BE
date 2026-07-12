@@ -58,9 +58,10 @@ app:
     allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:5173}
   jwt:
     secret: ${APP_JWT_SECRET:change-this-secret-to-a-long-random-string-in-production-min-32-chars}
-    # 2h. JWT stateless nen khong the thu hoi truoc han — rut ngan vong doi de gioi han
-    # cua so rui ro neu token bi lo (logout chi xoa token phia client). Chinh qua APP_JWT_EXPIRATION_MS.
-    expiration-ms: ${APP_JWT_EXPIRATION_MS:7200000}
+    # 8h. JWT stateless nen khong the thu hoi truoc han — vong doi du dai de phien lam viec
+    # trong ngay khong het han giua chung, van gioi han cua so rui ro neu token bi lo
+    # (logout chi xoa token phia client). Chinh qua APP_JWT_EXPIRATION_MS.
+    expiration-ms: ${APP_JWT_EXPIRATION_MS:28800000}
 
 payos:
   client-id: ${PAYOS_CLIENT_ID:}

@@ -31,6 +31,7 @@ public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
     private final JwtAuthFilter jwtAuthFilter;
+    private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
     /** Cac origin FE duoc phep goi API (cau hinh qua app.cors.allowed-origins, phan cach bang dau phay). */
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:5173}")
@@ -70,6 +71,9 @@ public class SecurityConfig {
                                 "/api-docs/**", "/v3/api-docs/**")
                         .permitAll()
                         .anyRequest().authenticated())
+                // Chua xac thuc (thieu token / het han / chu ky sai) -> 401 de FE dieu huong ve
+                // trang dang nhap. Da xac thuc nhung thieu quyen role -> van 403 (handler mac dinh).
+                .exceptionHandling(ex -> ex.authenticationEntryPoint(restAuthenticationEntryPoint))
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
