@@ -8,7 +8,8 @@ import lombok.Setter;
 @Setter
 public class SystemConfigRequest {
 
-    @NotBlank(message = "Config key khong duoc trong")
+    // Bat buoc khi tao moi (POST) — validate trong SystemConfigService.create.
+    // KHONG @NotBlank vi khi update (PUT) key lay tu path, body khong can gui lai configKey.
     private String configKey;
 
     @NotBlank(message = "Config value khong duoc trong")

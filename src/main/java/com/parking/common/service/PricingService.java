@@ -13,7 +13,6 @@ import java.time.LocalTime;
 
 @Service
 @RequiredArgsConstructor
-@SuppressWarnings("null")
 public class PricingService {
 
     private final PricingPolicyRepository pricingPolicyRepository;

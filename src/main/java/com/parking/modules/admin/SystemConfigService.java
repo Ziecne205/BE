@@ -1,5 +1,7 @@
 package com.parking.modules.admin;
 
+import com.parking.common.exception.BadRequestException;
+import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.AuditLogWriter;
 import com.parking.entity.SystemConfig;
@@ -29,8 +31,11 @@ public class SystemConfigService {
 
     @Transactional
     public SystemConfig create(SystemConfigRequest request, String actorUsername) {
+        if (request.getConfigKey() == null || request.getConfigKey().isBlank()) {
+            throw new BadRequestException("Config key khong duoc trong", "VALIDATION_ERROR");
+        }
         if (systemConfigRepository.existsById(request.getConfigKey())) {
-            throw new RuntimeException("Config key '" + request.getConfigKey() + "' da ton tai");
+            throw new BusinessRuleException("Config key '" + request.getConfigKey() + "' da ton tai");
         }
         SystemConfig config = SystemConfig.builder()
                 .configKey(request.getConfigKey())
