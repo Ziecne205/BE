@@ -67,5 +67,9 @@ payos:
   client-id: ${PAYOS_CLIENT_ID:}
   api-key: ${PAYOS_API_KEY:}
   checksum-key: ${PAYOS_CHECKSUM_KEY:}
-  return-url: ${PAYOS_RETURN_URL:http://localhost:3000/driver/my-bookings}
-  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3000/driver/book}
+  # PHAI tro ve /driver/payment/return — trang nay goi confirm-deposit (verify voi PayOS) de flip
+  # reservation Pending -> Confirmed va danh dau Payment = Success. Neu tro thang ve /driver/my-bookings
+  # thi buoc xac nhan bi BO QUA, coc ket o Pending mai (webhook PayOS khong goi duoc vao localhost).
+  # PORT phai khop cong app parking-driver dang chay.
+  return-url: ${PAYOS_RETURN_URL:http://localhost:3001/driver/payment/return}
+  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3001/driver/payment/return?cancel=true}

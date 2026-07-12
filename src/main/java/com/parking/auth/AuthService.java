@@ -100,16 +100,46 @@ public class AuthService {
         return new LoginResponse(token, user.getUsername(), role.getRoleName());
     }
 
-    /**
-     * Bat dau luong khoi phuc mat khau bang OTP. Nhan dinh danh (username / email / SDT), sinh ma
-     * OTP 6 so gui toi email da dang ky cua tai khoan. Tra ve email da che (masked) de FE hien
-     * "da gui ma toi n***@gmail.com". Khac voi truoc: KHONG con anti-enumeration — bao loi ro rang
-     * neu khong tim thay tai khoan / tai khoan chua co email (theo yeu cau nghiep vu cho demo).
-     */
+    // ── Khoi phuc mat khau bang OTP — TACH 2 KENH theo vai tro ────────────────────────────────
+    // Kenh KHACH (Driver): app tai xe (parking-driver) goi /auth/forgot-password + /auth/reset-password.
+    // Kenh NOI BO (Staff/Manager/Admin): cong quan tri (parking-fe) goi /auth/staff/forgot-password +
+    // /auth/staff/reset-password. Moi kenh chi phuc vu dung nhom vai tro cua no, nen app tai xe cong
+    // khai KHONG the dat lai mat khau tai khoan noi bo (va nguoc lai). Bao mat cot loi van la kiem
+    // soat hop thu email nhan OTP; viec tach kenh loai bo app khach khoi be mat tan cong tai khoan quan tri.
+
+    /** Kenh KHACH: bat dau khoi phuc mat khau tai khoan Driver — tra ve email da che (n***@gmail.com). */
     public String processForgotPassword(String identifier) {
+        return startReset(identifier, true);
+    }
+
+    /** Kenh KHACH: dat lai mat khau tai khoan Driver bang OTP (dung 1 lan). */
+    public void resetPasswordWithOtp(String otp, String newPassword) {
+        finishReset(otp, newPassword, true);
+    }
+
+    /** Kenh NOI BO: bat dau khoi phuc mat khau tai khoan Staff/Manager/Admin — tra ve email da che. */
+    public String processStaffForgotPassword(String identifier) {
+        return startReset(identifier, false);
+    }
+
+    /** Kenh NOI BO: dat lai mat khau tai khoan Staff/Manager/Admin bang OTP (dung 1 lan). */
+    public void resetStaffPasswordWithOtp(String otp, String newPassword) {
+        finishReset(otp, newPassword, false);
+    }
+
+    /**
+     * Sinh + gui OTP dat lai mat khau, GIOI HAN theo dung kenh: {@code driverChannel=true} chi phuc vu
+     * tai khoan Driver, {@code false} chi phuc vu Staff/Manager/Admin. Dung sai kenh -> tu choi (tranh
+     * dung app khach de dat lai mat khau tai khoan noi bo).
+     */
+    private String startReset(String identifier, boolean driverChannel) {
         User user = userRepository.findByUsernameOrEmailOrPhone(identifier).stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Khong tim thay tai khoan voi thong tin nay"));
+
+        if (isDriver(user) != driverChannel) {
+            throw new BusinessRuleException(wrongChannelMessage(driverChannel), "SELF_RESET_WRONG_CHANNEL");
+        }
 
         if (user.getEmail() == null || user.getEmail().isBlank()) {
             throw new BusinessRuleException("Tai khoan chua co email de nhan ma OTP", "NO_EMAIL_ON_ACCOUNT");
@@ -126,12 +156,13 @@ public class AuthService {
                 .build());
 
         emailService.sendPasswordResetOtp(user.getEmail(), otp, OTP_TTL_MINUTES);
-        log.info("Da gui OTP dat lai mat khau cho user {}", user.getUsername());
+        log.info("Da gui OTP dat lai mat khau cho user {} (kenh {})",
+                user.getUsername(), driverChannel ? "khach" : "noi bo");
         return maskEmail(user.getEmail());
     }
 
-    /** Dat lai mat khau bang OTP (dung 1 lan). OTP la duy nhat toan cuc nen du de xac dinh user. */
-    public void resetPasswordWithOtp(String otp, String newPassword) {
+    /** Dat lai mat khau bang OTP (dung 1 lan), rang buoc dung kenh da phat hanh (khach vs noi bo). */
+    private void finishReset(String otp, String newPassword, boolean driverChannel) {
         if (newPassword == null || newPassword.length() < PASSWORD_MIN_LEN || newPassword.length() > PASSWORD_MAX_LEN) {
             throw new BadRequestException(
                     "Mật khẩu phải có từ " + PASSWORD_MIN_LEN + " đến " + PASSWORD_MAX_LEN + " ký tự",
@@ -148,12 +179,24 @@ public class AuthService {
         }
 
         User user = resetToken.getUser();
+        // Phong thu 2 lop: OTP chi dung duoc dung kenh da phat hanh cho no.
+        if (isDriver(user) != driverChannel) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new BusinessRuleException(wrongChannelMessage(driverChannel), "SELF_RESET_WRONG_CHANNEL");
+        }
+
         user.setPasswordHash(passwordEncoder.encode(newPassword));
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
         // OTP dung mot lan: xoa sau khi doi mat khau thanh cong.
         passwordResetTokenRepository.delete(resetToken);
+    }
+
+    private String wrongChannelMessage(boolean driverChannel) {
+        return driverChannel
+                ? "Tai khoan noi bo (nhan vien/quan ly) vui long dat lai mat khau tai cong quan tri."
+                : "Tai khoan khach hang vui long dat lai mat khau tren ung dung tai xe.";
     }
 
     /**
@@ -241,6 +284,11 @@ public class AuthService {
     /** OTP 6 so ngau nhien. */
     private String randomOtp() {
         return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
+    }
+
+    /** Tai khoan co phai KHACH (Driver) hay khong — dung de gioi han kenh dat lai mat khau. */
+    private boolean isDriver(User user) {
+        return user.getRole() != null && "Driver".equalsIgnoreCase(user.getRole().getRoleName());
     }
 
     /** OTP 6 so, duy nhat toan cuc (cot Token co rang buoc UNIQUE) — sinh lai neu trung. */
