@@ -22,4 +22,9 @@ public class RegisterRequest {
 
     @Email
     private String email;
+
+    // KHONG them truong roleName vao DTO nay. Dang ky cong khai LUON tao tai khoan Driver
+    // (ep cung trong AuthService.verifyRegistration). Tai khoan Staff/Manager/Admin chi duoc
+    // Admin tao qua UserAdminController (Admin-only). Cho client tu chon roleName tren endpoint
+    // /auth/** cong khai = lo hong leo thang dac quyen (ai cung dang ky duoc tai khoan Admin).
 }
