@@ -8,6 +8,7 @@ import com.parking.entity.Reservation;
 import com.parking.repository.PaymentRepository;
 import com.parking.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -36,6 +37,7 @@ import java.util.TreeMap;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PayosService {
 
     private static final String CREATE_URL = "https://api-merchant.payos.vn/v2/payment-requests";
@@ -180,7 +182,7 @@ public class PayosService {
      * da Success). Dung chung boi webhook (handleWebhook) va polling (verifyPaymentStatus).
      */
     private void markPaymentPaid(String orderCode) {
-        paymentRepository.findFirstByTransactionReference(orderCode).ifPresent(payment -> {
+        paymentRepository.findFirstByTransactionReference(orderCode).ifPresentOrElse(payment -> {
             if ("Success".equals(payment.getPaymentStatus())) {
                 return; // da xu ly
             }
@@ -193,8 +195,13 @@ public class PayosService {
                 r.setDepositStatus("Paid");
                 r.setStatus("Confirmed");
                 reservationRepository.save(r);
+                log.info("[PayOS-verify] orderCode={} -> Payment=Success, reservation #{} = Confirmed",
+                        orderCode, r.getReservationId());
+            } else {
+                log.warn("[PayOS-verify] orderCode={} Payment=Success nhung reservation khong o trang thai Pending (r={})",
+                        orderCode, r == null ? "null" : r.getStatus());
             }
-        });
+        }, () -> log.warn("[PayOS-verify] orderCode={} PAID nhung KHONG tim thay Payment trong DB", orderCode));
     }
 
     @Transactional
@@ -209,8 +216,11 @@ public class PayosService {
                     CREATE_URL + "/" + orderCode, HttpMethod.GET, new HttpEntity<>(headers), JsonNode.class);
             root = resp.getBody();
         } catch (Exception e) {
+            log.error("[PayOS-verify] orderCode={} loi goi API: {}", orderCode, e.getMessage());
             throw new BusinessRuleException("Loi goi PayOS de kiem tra giao dich: " + e.getMessage(), "PAYOS_ERROR");
         }
+        // Log nguyen phan hoi PayOS de chan doan (grep "[PayOS-verify]"). Day la noi hay "im lang" fail.
+        log.info("[PayOS-verify] orderCode={} phan hoi tu PayOS: {}", orderCode, root);
         if (root == null || !"00".equals(root.path("code").asText())) {
             String desc = root == null ? "khong co phan hoi" : root.path("desc").asText();
             throw new BusinessRuleException("Khong the lay thong tin tu PayOS: " + desc, "PAYOS_ERROR");
@@ -218,6 +228,7 @@ public class PayosService {
 
         JsonNode data = root.path("data");
         String status = data.path("status").asText();
+        log.info("[PayOS-verify] orderCode={} status={}", orderCode, status);
 
         if ("PAID".equals(status)) {
             markPaymentPaid(String.valueOf(orderCode));

@@ -46,8 +46,11 @@ public class ReservationController {
     }
 
     @PostMapping("/{id}/confirm-deposit")
-    public ApiResponse<Map<String, Boolean>> confirmDeposit(@PathVariable Long id, Authentication auth) {
-        reservationService.confirmDeposit(id, auth.getName());
+    public ApiResponse<Map<String, Boolean>> confirmDeposit(@PathVariable Long id,
+            @RequestParam(required = false) Long orderCode, Authentication auth) {
+        // orderCode: ma giao dich PayOS tra ve trong return-url — giao dich THUC SU da thanh toan.
+        // Neu thieu, fallback ve giao dich moi nhat (tuong thich nguoc).
+        reservationService.confirmDeposit(id, auth.getName(), orderCode);
         return ApiResponse.ok("Thanh toan coc thanh cong", Map.of("success", true));
     }
 }

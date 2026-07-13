@@ -20,7 +20,11 @@ public class UserAdminController {
 
     private final UserAdminService userAdminService;
 
+    // Manager cung duoc tao tai khoan (Staff / Manager cap duoi hoac ngang) — nhung KHONG tao
+    // duoc Admin. UserAdminService.createUser ap thu bac vai tro. Cac thao tac con lai (khoa/mo,
+    // reset mat khau, xem danh sach) van chi danh cho Admin (class-level @PreAuthorize o tren).
     @PostMapping
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ApiResponse<User> createUser(@Valid @RequestBody AdminUserCreationRequest request, Authentication auth) {
         return ApiResponse.ok("Tao nguoi dung thanh cong", userAdminService.createUser(request, auth.getName()));
     }

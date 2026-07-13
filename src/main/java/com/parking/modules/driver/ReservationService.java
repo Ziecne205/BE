@@ -186,7 +186,7 @@ public class ReservationService {
      * Dung cho ca QR (demo) va Tien mat. Chi chu booking moi duoc thanh toan.
      */
     @Transactional
-    public Reservation confirmDeposit(Long id, String username) {
+    public Reservation confirmDeposit(Long id, String username, Long orderCode) {
         Reservation reservation = findById(id);
         if (!reservation.getUser().getUsername().equals(username)) {
             throw new BusinessRuleException("Ban khong co quyen thanh toan booking nay");
@@ -194,16 +194,29 @@ public class ReservationService {
         if (!"Pending".equals(reservation.getStatus())) {
             throw new BusinessRuleException("Booking khong o trang thai cho thanh toan coc");
         }
-        
-        Payment payment = paymentRepository.findFirstByReservation_ReservationIdOrderByPaymentIdDesc(id)
-                .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich cho booking nay"));
-                
+
+        // Uu tien orderCode PayOS tra ve (giao dich thuc su da thanh toan). Neu thieu, fallback ve
+        // giao dich moi nhat — nhung khi khach thu thanh toan nhieu lan, "moi nhat" co the KHAC voi
+        // giao dich da tra, khien coc khong bao gio duoc xac nhan. Do do luon uu tien orderCode.
+        Payment payment;
+        if (orderCode != null) {
+            payment = paymentRepository.findFirstByTransactionReference(String.valueOf(orderCode))
+                    .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich " + orderCode));
+            if (payment.getReservation() == null
+                    || !payment.getReservation().getReservationId().equals(id)) {
+                throw new BusinessRuleException("Giao dich khong thuoc booking nay");
+            }
+        } else {
+            payment = paymentRepository.findFirstByReservation_ReservationIdOrderByPaymentIdDesc(id)
+                    .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich cho booking nay"));
+        }
+
         if (payment.getTransactionReference() == null) {
             throw new BusinessRuleException("Giao dich khong co ma tham chieu (orderCode)");
         }
-        
+
         payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));
-        
+
         return reservationRepository.findById(id).orElseThrow();
     }
 }
