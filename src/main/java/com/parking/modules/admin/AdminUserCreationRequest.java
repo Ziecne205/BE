@@ -24,9 +24,9 @@ public class AdminUserCreationRequest {
     @Email(message = "Email khong hop le")
     private String email;
 
-    // Cho phep ca 4 vai tro o muc DTO; AI duoc tao vai tro NAO do UserAdminService kiem soat
-    // theo thu bac (chi duoc tao vai tro <= vai tro cua nguoi tao) — chong leo thang dac quyen.
+    // KHONG cho tao tai khoan Admin qua API (tai khoan Admin do DB/seed cap) — chong leo thang
+    // dac quyen. Admin va Manager (endpoint mo cho ca hai) deu tao duoc Manager/Staff/Driver.
     @NotBlank(message = "Role khong duoc de trong")
-    @Pattern(regexp = "^(Admin|Manager|Staff|Driver)$", message = "Role phai la Admin, Manager, Staff, hoac Driver")
+    @Pattern(regexp = "^(Manager|Staff|Driver)$", message = "Role phai la Manager, Staff, hoac Driver")
     private String roleName;
 }
