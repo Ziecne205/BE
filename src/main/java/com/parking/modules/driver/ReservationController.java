@@ -4,10 +4,12 @@ import com.parking.common.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +26,19 @@ public class ReservationController {
     public ApiResponse<ReservationDTO> create(@Valid @RequestBody ReservationRequest request, Authentication auth) {
         return ApiResponse.ok("Tao booking thanh cong, vui long thanh toan coc de xac nhan",
                 ReservationDTO.from(reservationService.create(request, auth.getName())));
+    }
+
+    /**
+     * Uoc tinh phi do + tien coc cho mot khung gio (khong tao booking). FE goi de hien thi so
+     * lieu do BE tinh — moi thay doi bang gia / % coc cua Manager tu dong phan anh, FE khong
+     * hardcode cong thuc.
+     */
+    @GetMapping("/quote")
+    public ApiResponse<ReservationQuoteDTO> quote(
+            @RequestParam Integer vehicleTypeId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime entryTime,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime exitTime) {
+        return ApiResponse.ok(reservationService.quote(vehicleTypeId, entryTime, exitTime));
     }
 
     @GetMapping("/my")

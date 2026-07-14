@@ -16,7 +16,7 @@ public class FeeConfigService {
     public FeeConfigResponse getFeeConfig() {
         return FeeConfigResponse.builder()
                 .hourlyRate(getBigDecimalValue("HOURLY_RATE", BigDecimal.ZERO))
-                .depositPercent(getBigDecimalValue("DEPOSIT_PERCENT", BigDecimal.valueOf(0.20)))
+                .depositPercent(getBigDecimalValue("DEPOSIT_PERCENT", BigDecimal.valueOf(0.50)))
                 .overstayRatePerHour(getBigDecimalValue("OVERSTAY_RATE_PER_HOUR", BigDecimal.valueOf(50000))) // Default fallback
                 .noShowGraceMinutes(getIntegerValue("NO_SHOW_GRACE_MINUTES", 15))
                 .blacklistThreshold(getIntegerValue("BLACKLIST_THRESHOLD", 3))

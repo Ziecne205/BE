@@ -4,6 +4,7 @@ import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.entity.*;
 import com.parking.repository.*;
+import com.parking.common.service.PricingService;
 import com.parking.modules.manager.FeeConfigService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class ReservationService {
     private final FeeConfigService feeConfigService;
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
+    private final PricingService pricingService;
 
     // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
     // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
@@ -58,8 +60,12 @@ public class ReservationService {
                     "Bang gia cho loai xe nay chua duoc cau hinh (thieu gia co ban)",
                     "PRICING_NOT_CONFIGURED");
         }
-        BigDecimal depositPercent = feeConfigService.getFeeConfig().getDepositPercent();
-        BigDecimal deposit = policy.getBasePrice().multiply(depositPercent);
+        // Coc = depositPercent cua TONG phi uoc tinh cho ca khung gio dat (base + gio vuot +
+        // phu phi dem), KHONG phai chi basePrice. Dung chung PricingService.calculateFee voi uoc
+        // tinh ben Driver va phi checkout de ca ba luon khop nhau. Xem depositFor() ve don vi %.
+        BigDecimal estimatedFee = pricingService.calculateFee(
+                policy, request.getExpectedEntryTime(), request.getExpectedExitTime());
+        BigDecimal deposit = depositFor(estimatedFee);
 
         Reservation reservation = Reservation.builder()
                 .user(user)
@@ -73,6 +79,32 @@ public class ReservationService {
                 .createdAt(LocalDateTime.now())
                 .build();
         return reservationRepository.save(reservation);
+    }
+
+    /**
+     * Uoc tinh phi + tien coc cho mot khung gio dat, KHONG tao booking. Cho FE goi de hien thi
+     * (thay vi lap lai cong thuc gia o client). Dung dung cong thuc phi/coc voi luc tao booking.
+     */
+    @Transactional(readOnly = true)
+    public ReservationQuoteDTO quote(Integer vehicleTypeId, LocalDateTime entryTime, LocalDateTime exitTime) {
+        if (!exitTime.isAfter(entryTime)) {
+            throw new BusinessRuleException("Gio ra phai sau gio vao");
+        }
+        BigDecimal fee = pricingService.calculateFee(vehicleTypeId, entryTime, exitTime);
+        return new ReservationQuoteDTO(fee, depositFor(fee));
+    }
+
+    /**
+     * Tien coc = depositPercent cua tong phi uoc tinh. depositPercent duoc chap nhan o CA HAI
+     * dang de tranh loi don vi: phan tram (vd 50) HOAC phan so (0.5) — gia tri > 1 duoc coi la
+     * phan tram va chia 100. Nho vay Manager nhap 50 (= 50%) khong con bi tinh thanh 50 lan phi.
+     */
+    private BigDecimal depositFor(BigDecimal estimatedFee) {
+        BigDecimal pct = feeConfigService.getFeeConfig().getDepositPercent();
+        BigDecimal fraction = pct.compareTo(BigDecimal.ONE) > 0
+                ? pct.divide(BigDecimal.valueOf(100))
+                : pct;
+        return estimatedFee.multiply(fraction);
     }
 
     /**
