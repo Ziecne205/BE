@@ -52,10 +52,11 @@ springdoc:
 
 app:
   # URL goc cua FE, dung de dung link dat lai mat khau trong email.
-  frontend-base-url: ${APP_FRONTEND_BASE_URL:http://localhost:3000}
+  frontend-base-url: ${APP_FRONTEND_BASE_URL:https://fe-kappa-two.vercel.app}
   cors:
     # Danh sach origin FE duoc phep (phan cach bang dau phay). KHONG dung "*" o production.
-    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:5173}
+    # parking-driver va parking-fe da deploy len Vercel; giu ca localhost de dev local van chay.
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001,http://localhost:5173,https://parking-driver.vercel.app,https://fe-kappa-two.vercel.app}
   jwt:
     secret: ${APP_JWT_SECRET:change-this-secret-to-a-long-random-string-in-production-min-32-chars}
     # 8h. JWT stateless nen khong the thu hoi truoc han — vong doi du dai de phien lam viec
@@ -70,6 +71,6 @@ payos:
   # PHAI tro ve /driver/payment/return — trang nay goi confirm-deposit (verify voi PayOS) de flip
   # reservation Pending -> Confirmed va danh dau Payment = Success. Neu tro thang ve /driver/my-bookings
   # thi buoc xac nhan bi BO QUA, coc ket o Pending mai (webhook PayOS khong goi duoc vao localhost).
-  # PORT phai khop cong app parking-driver dang chay.
-  return-url: ${PAYOS_RETURN_URL:http://localhost:3001/driver/payment/return}
-  cancel-url: ${PAYOS_CANCEL_URL:http://localhost:3001/driver/payment/return?cancel=true}
+  # parking-driver da deploy len Vercel nen tro thang ve domain do; doi lai localhost:3001 neu test local.
+  return-url: ${PAYOS_RETURN_URL:https://parking-driver.vercel.app/driver/payment/return}
+  cancel-url: ${PAYOS_CANCEL_URL:https://parking-driver.vercel.app/driver/payment/return?cancel=true}
