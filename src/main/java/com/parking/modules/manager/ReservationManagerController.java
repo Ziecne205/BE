@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Xem dat cho cho phan he Quan ly - khac voi /driver/reservations/my (chi cua
@@ -35,7 +36,7 @@ public class ReservationManagerController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Chi tiet mot dat cho")
-    public ApiResponse<Reservation> findById(@PathVariable Long id) {
+    public ApiResponse<Reservation> findById(@PathVariable UUID id) {
         return ApiResponse.ok("Chi tiet dat cho", reservationService.findById(id));
     }
 }

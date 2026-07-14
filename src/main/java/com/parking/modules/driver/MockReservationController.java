@@ -12,6 +12,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/driver/reservations")
@@ -24,7 +25,7 @@ public class MockReservationController {
     private final ReservationRepository reservationRepository;
 
     @PostMapping("/{id}/mock-confirm-deposit")
-    public ApiResponse<Map<String, Boolean>> mockConfirmDeposit(@PathVariable Long id, Authentication auth) {
+    public ApiResponse<Map<String, Boolean>> mockConfirmDeposit(@PathVariable UUID id, Authentication auth) {
         Reservation reservation = reservationRepository.findById(id)
                 .orElseThrow(() -> new BusinessRuleException("Khong tim thay booking #" + id));
         if (!reservation.getUser().getUsername().equals(auth.getName())) {

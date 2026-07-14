@@ -8,6 +8,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.UUID;
+
 @RestController
 @RequestMapping("/api/driver/payments")
 @RequiredArgsConstructor
@@ -24,14 +26,14 @@ public class PaymentDriverController {
 
     @PostMapping("/payos/create-link")
     public ApiResponse<PayosLinkResponse> createPayosLink(@RequestBody PayosLinkRequest request, Authentication auth) {
-        // DEPOSIT: id = reservationId (tien coc dat cho). PARKING: id = sessionId (phi gui xe phien dang do).
+        // DEPOSIT: id = reservationId (UUID, tien coc dat cho). PARKING: id = sessionId (so, phi gui xe phien dang do).
         if ("DEPOSIT".equalsIgnoreCase(request.getType())) {
             return ApiResponse.ok("Tao link PayOS thanh cong",
-                    payosService.createDepositLink(request.getId(), auth.getName()));
+                    payosService.createDepositLink(UUID.fromString(request.getId()), auth.getName()));
         }
         if ("PARKING".equalsIgnoreCase(request.getType())) {
             return ApiResponse.ok("Tao link PayOS thanh cong",
-                    paymentDriverService.createParkingLink(request.getId(), auth.getName()));
+                    paymentDriverService.createParkingLink(Long.parseLong(request.getId()), auth.getName()));
         }
         return ApiResponse.fail("Loai thanh toan khong hop le (chi ho tro DEPOSIT hoac PARKING)");
     }

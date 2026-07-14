@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
@@ -20,5 +21,5 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
     java.util.Optional<Payment> findFirstByTransactionReference(String transactionReference);
 
-    java.util.Optional<Payment> findFirstByReservation_ReservationIdOrderByPaymentIdDesc(Long reservationId);
+    java.util.Optional<Payment> findFirstByReservation_ReservationIdOrderByPaymentIdDesc(UUID reservationId);
 }

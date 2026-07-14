@@ -15,6 +15,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Vi du CRUD day du cho phan he Khach hang / Lai xe (Driver).
@@ -153,7 +154,7 @@ public class ReservationService {
     }
 
     @Transactional(readOnly = true)
-    public Reservation findById(Long id) {
+    public Reservation findById(UUID id) {
         return reservationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
     }
@@ -163,7 +164,7 @@ public class ReservationService {
      * Phai chay trong transaction de truy cap cac association lazy (user, vehicleType).
      */
     @Transactional(readOnly = true)
-    public ReservationDTO findByIdAsDto(Long id, String username, boolean isPrivileged) {
+    public ReservationDTO findByIdAsDto(UUID id, String username, boolean isPrivileged) {
         Reservation reservation = reservationRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
         if (!isPrivileged && !reservation.getUser().getUsername().equals(username)) {
@@ -173,7 +174,7 @@ public class ReservationService {
     }
 
     @Transactional
-    public Reservation cancel(Long id, String username) {
+    public Reservation cancel(UUID id, String username) {
         Reservation reservation = findById(id);
         if (!reservation.getUser().getUsername().equals(username)) {
             throw new BusinessRuleException("Ban khong co quyen huy booking nay");
@@ -218,7 +219,7 @@ public class ReservationService {
      * Dung cho ca QR (demo) va Tien mat. Chi chu booking moi duoc thanh toan.
      */
     @Transactional
-    public Reservation confirmDeposit(Long id, String username, Long orderCode) {
+    public Reservation confirmDeposit(UUID id, String username, Long orderCode) {
         Reservation reservation = findById(id);
         if (!reservation.getUser().getUsername().equals(username)) {
             throw new BusinessRuleException("Ban khong co quyen thanh toan booking nay");

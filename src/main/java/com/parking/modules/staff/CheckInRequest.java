@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.UUID;
+
 @Getter
 @Setter
 public class CheckInRequest {
@@ -20,7 +22,7 @@ public class CheckInRequest {
 
     private String entryImageUrl;
 
-    private Long reservationId;
+    private UUID reservationId;
 
     /** Neu khach da dang nhap app va check-in walk-in (khong dat cho truoc). */
     private Long driverUserId;

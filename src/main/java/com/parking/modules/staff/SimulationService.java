@@ -19,6 +19,7 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Cong cu Mo phong Cong & Camera (Staff demo). Anh xa sang nghiep vu that:
@@ -48,11 +49,11 @@ public class SimulationService {
                     "SCAN_FAILED", "Camera doc bien so that bai — nhap tay");
         }
 
-        Long parsedResId = null;
+        UUID parsedResId = null;
         if (reservationIdStr != null && !reservationIdStr.isBlank()) {
             try {
-                parsedResId = Long.parseLong(reservationIdStr);
-            } catch (NumberFormatException ignored) {
+                parsedResId = UUID.fromString(reservationIdStr);
+            } catch (IllegalArgumentException ignored) {
             }
         }
 

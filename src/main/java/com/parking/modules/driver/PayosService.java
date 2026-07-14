@@ -27,6 +27,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.UUID;
 
 /**
  * Tich hop PayOS goi thang REST API (khong dung SDK de tranh phu thuoc
@@ -67,7 +68,7 @@ public class PayosService {
     }
 
     @Transactional
-    public PayosLinkResponse createDepositLink(Long reservationId, String username) {
+    public PayosLinkResponse createDepositLink(UUID reservationId, String username) {
         if (clientId == null || clientId.isBlank()) {
             throw new BusinessRuleException("PayOS chua duoc cau hinh (thieu key)", "PAYOS_NOT_CONFIGURED");
         }
@@ -271,13 +272,21 @@ public class PayosService {
 
     /**
      * Build a unique orderCode that stays within JS Number.MAX_SAFE_INTEGER (< 10^15).
-     * Formula: (reservationId % 10^8) * 10^6 + (currentTimeMillis % 10^6)
+     * reservationId la UUID (khong con la so) nen dung hashCode cua no thay cho modulo truc tiep.
+     */
+    private long buildOrderCode(UUID reservationId) {
+        return buildOrderCode(Math.abs((long) reservationId.hashCode()));
+    }
+
+    /**
+     * Build a unique orderCode that stays within JS Number.MAX_SAFE_INTEGER (< 10^15).
+     * Formula: (idPart % 10^8) * 10^6 + (currentTimeMillis % 10^6)
      * Max value: 99_999_999 * 1_000_000 + 999_999 = 99_999_999_999_999 < 9_007_199_254_740_991.
      * Retries up to 5 times if a collision is found in the Payment table.
      */
-    private long buildOrderCode(Long reservationId) {
+    private long buildOrderCode(long idPart) {
         for (int attempt = 0; attempt < 5; attempt++) {
-            long code = (reservationId % 100_000_000L) * 1_000_000L
+            long code = (idPart % 100_000_000L) * 1_000_000L
                     + (System.currentTimeMillis() % 1_000_000L);
             if (paymentRepository.findFirstByTransactionReference(String.valueOf(code)).isEmpty()) {
                 return code;

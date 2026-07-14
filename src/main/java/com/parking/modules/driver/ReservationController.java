@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/driver/reservations")
@@ -48,7 +49,7 @@ public class ReservationController {
     }
 
     @GetMapping("/{id}")
-    public ApiResponse<ReservationDTO> findById(@PathVariable Long id, Authentication auth) {
+    public ApiResponse<ReservationDTO> findById(@PathVariable UUID id, Authentication auth) {
         boolean isPrivileged = auth.getAuthorities().stream()
                 .anyMatch(a -> a.getAuthority().equals("ROLE_MANAGER")
                             || a.getAuthority().equals("ROLE_ADMIN"));
@@ -56,12 +57,12 @@ public class ReservationController {
     }
 
     @PatchMapping("/{id}/cancel")
-    public ApiResponse<ReservationDTO> cancel(@PathVariable Long id, Authentication auth) {
+    public ApiResponse<ReservationDTO> cancel(@PathVariable UUID id, Authentication auth) {
         return ApiResponse.ok("Da huy booking", ReservationDTO.from(reservationService.cancel(id, auth.getName())));
     }
 
     @PostMapping("/{id}/confirm-deposit")
-    public ApiResponse<Map<String, Boolean>> confirmDeposit(@PathVariable Long id,
+    public ApiResponse<Map<String, Boolean>> confirmDeposit(@PathVariable UUID id,
             @RequestParam(required = false) Long orderCode, Authentication auth) {
         // orderCode: ma giao dich PayOS tra ve trong return-url — giao dich THUC SU da thanh toan.
         // Neu thieu, fallback ve giao dich moi nhat (tuong thich nguoc).

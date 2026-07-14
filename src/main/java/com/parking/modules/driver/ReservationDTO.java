@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * DTO phang cho dat cho — tranh tra nguyen Entity (keo theo User co passwordHash + lazy graph).
@@ -17,7 +18,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ReservationDTO {
-    private Long reservationId;
+    private UUID reservationId;
     private Long userId;
     private Integer vehicleTypeId;
     private String vehicleTypeName;

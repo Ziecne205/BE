@@ -7,3 +7,4 @@ target/
 HELP.md
 *.log
 .env
+.claude/launch.json

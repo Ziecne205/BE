@@ -5,6 +5,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
 @Entity
@@ -17,9 +18,9 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public class Reservation {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.UUID)
     @Column(name = "ReservationID")
-    private Long reservationId;
+    private UUID reservationId;
 
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
