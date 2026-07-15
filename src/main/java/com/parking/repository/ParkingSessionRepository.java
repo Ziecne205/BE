@@ -22,4 +22,7 @@ public interface ParkingSessionRepository extends JpaRepository<ParkingSession, 
 
     /** Phien "Admitted" qua lau khong co tien trien (chua duoc ghi o thuc te / check-out) -> nghi van bo xe/loiterer. */
     List<ParkingSession> findByStatusAndEntryTimeBefore(String status, LocalDateTime threshold);
+
+    /** Dung de chan xoa mot Gate dang/da duoc tham chieu boi lich su phien (EntryGateID hoac ExitGateID). */
+    boolean existsByEntryGate_GateIdOrExitGate_GateId(Integer entryGateId, Integer exitGateId);
 }

@@ -143,7 +143,8 @@ public class SessionService {
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
                 .detail("Staff checked in vehicle: " + request.getLicensePlate()
-                        + (reservation != null ? " with booking" : " as walk-in"))
+                        + (reservation != null ? " with booking" : " as walk-in")
+                        + " | cong vao: " + entryGate.getGateName())
                 .createdAt(now)
                 .build();
         auditLogRepository.save(log);
@@ -307,7 +308,8 @@ public class SessionService {
                         + " | " + minutes + " min | " + settledAmount + " VND | " + paymentMethod
                         + (onlinePaid != null ? " (ONLINE, computed=" + amount + ")" : "")
                         + (lostTicket ? " | LOST TICKET" : "")
-                        + (plateMismatch ? " | PLATE MISMATCH (in=" + session.getLicensePlateIn() + ")" : ""))
+                        + (plateMismatch ? " | PLATE MISMATCH (in=" + session.getLicensePlateIn() + ")" : "")
+                        + " | cong ra: " + exitGate.getGateName())
                 .createdAt(exitTime)
                 .build();
         auditLogRepository.save(log);
