@@ -131,7 +131,26 @@ public class SessionExpiryScheduler {
         for (Reservation reservation : noShowReservations) {
             reservationService.cancelWithRefund(reservation, "Expired", false);
             log.warn("Reservation {} marked Expired (no-show) and deposit forfeited", reservation.getReservationId());
+            recordNoShow(reservation.getUser());
         }
+    }
+
+    /**
+     * Tang so lan no-show lien tiep cua khach + tu dong blacklist khi cham/vuot nguong
+     * (BLACKLIST_THRESHOLD, xem FeeConfig). Duoc reset ve 0 khi khach check-in thanh cong
+     * cho mot booking (xem SessionService.checkIn).
+     */
+    private void recordNoShow(User user) {
+        if (user == null) return;
+        int count = (user.getConsecutiveNoShows() == null ? 0 : user.getConsecutiveNoShows()) + 1;
+        user.setConsecutiveNoShows(count);
+        int threshold = feeConfigService.getFeeConfig().getBlacklistThreshold();
+        if (count >= threshold) {
+            user.setBlacklisted(true);
+            log.warn("User {} blacklisted after {} consecutive no-shows (threshold={})",
+                    user.getUserId(), count, threshold);
+        }
+        userRepository.save(user);
     }
 
     /**

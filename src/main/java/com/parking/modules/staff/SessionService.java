@@ -96,6 +96,14 @@ public class SessionService {
             }
             reservation.setStatus("CheckedIn");
             reservationRepository.save(reservation);
+            // Khach da den nhan xe -> khong con la no-show, reset chuoi lien tiep (xem
+            // SessionExpiryScheduler.recordNoShow tang bien nay khi qua han khong den).
+            User bookingUser = reservation.getUser();
+            if (bookingUser != null && bookingUser.getConsecutiveNoShows() != null
+                    && bookingUser.getConsecutiveNoShows() > 0) {
+                bookingUser.setConsecutiveNoShows(0);
+                userRepository.save(bookingUser);
+            }
         } else {
             if (request.getLicensePlate() == null || request.getLicensePlate().isBlank()) {
                 throw new BusinessRuleException("Bien so khong duoc de trong neu khong co ma dat cho");

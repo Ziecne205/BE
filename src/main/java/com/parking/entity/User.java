@@ -48,4 +48,14 @@ public class User {
 
     @Column(name = "UpdatedAt")
     private LocalDateTime updatedAt;
+
+    /** So lan no-show lien tiep (chua den nhan xe du da dat/xac nhan). Reset ve 0 khi check-in
+     * thanh cong; dat Blacklisted=true khi cham/vuot BLACKLIST_THRESHOLD (xem FeeConfig). */
+    @Builder.Default
+    @Column(name = "ConsecutiveNoShows", nullable = false)
+    private Integer consecutiveNoShows = 0;
+
+    @Builder.Default
+    @Column(name = "Blacklisted", nullable = false)
+    private Boolean blacklisted = false;
 }

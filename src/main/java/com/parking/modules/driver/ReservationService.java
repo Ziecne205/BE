@@ -56,6 +56,11 @@ public class ReservationService {
 
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user"));
+        if (Boolean.TRUE.equals(user.getBlacklisted())) {
+            throw new BusinessRuleException(
+                    "Tai khoan da bi dua vao danh sach den do nhieu lan khong den nhan xe, khong the dat cho moi",
+                    "USER_BLACKLISTED");
+        }
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy loại xe"));
 
