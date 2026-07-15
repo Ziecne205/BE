@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -192,20 +193,30 @@ public class PayosService {
             paymentRepository.save(payment);
 
             Reservation r = payment.getReservation();
-            if (r != null && "Pending".equals(r.getStatus())) {
+            // "Expired" duoc chap nhan cung "Pending": scheduler co the da het han booking trong luc
+            // khach van dang thanh toan tren PayOS (race dieu kien voi expireUnpaidReservations).
+            // PayOS da xac nhan PAID that (goi tu day) nen "hoi sinh" booking thay vi bo qua no.
+            if (r != null && ("Pending".equals(r.getStatus()) || "Expired".equals(r.getStatus()))) {
                 r.setDepositStatus("Paid");
                 r.setStatus("Confirmed");
                 reservationRepository.save(r);
                 log.info("[PayOS-verify] orderCode={} -> Payment=Success, reservation #{} = Confirmed",
                         orderCode, r.getReservationId());
             } else {
-                log.warn("[PayOS-verify] orderCode={} Payment=Success nhung reservation khong o trang thai Pending (r={})",
+                log.warn("[PayOS-verify] orderCode={} Payment=Success nhung reservation khong o trang thai Pending/Expired (r={})",
                         orderCode, r == null ? "null" : r.getStatus());
             }
         }, () -> log.warn("[PayOS-verify] orderCode={} PAID nhung KHONG tim thay Payment trong DB", orderCode));
     }
 
-    @Transactional
+    // REQUIRES_NEW: cac caller khac (vd SessionExpiryScheduler.expireUnpaidReservations) chay
+    // nhieu ban ghi trong CUNG mot transaction lon; neu ham nay dung propagation mac dinh (REQUIRED)
+    // va nem loi (vd PAYMENT_NOT_PAID hoan toan binh thuong, khong phai bug), Spring se danh dau
+    // CA transaction ngoai la rollback-only tai thoi diem nem — bat exception o caller khong cuu
+    // duoc, toan bo batch (ke ca cac ban ghi khac da xu ly xong hop le) se bi rollback ngam khi
+    // commit (UnexpectedRollbackException). Tach rieng transaction de 1 giao dich loi/chua thanh
+    // toan khong lam anh huong cac giao dich khac trong cung 1 lan chay scheduler.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void verifyPaymentStatus(long orderCode) {
         HttpHeaders headers = new HttpHeaders();
         headers.set("x-client-id", clientId);

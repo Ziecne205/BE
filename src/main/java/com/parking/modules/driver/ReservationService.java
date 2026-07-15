@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -44,21 +45,29 @@ public class ReservationService {
         if (!request.getExpectedExitTime().isAfter(request.getExpectedEntryTime())) {
             throw new BusinessRuleException("Gio ra phai sau gio vao");
         }
+        // Gio vao phai cach hien tai it nhat bang cua so thanh toan coc (DEPOSIT_PAYMENT_WINDOW_MINUTES),
+        // de khach co du thoi gian thanh toan PayOS truoc khi scheduler het han booking vi qua han coc
+        // (xem SessionExpiryScheduler.expireUnpaidReservations) — tranh dat cho sat gio roi khong kip tra.
+        int depositWindowMinutes = feeConfigService.getFeeConfig().getDepositPaymentWindowMinutes();
+        if (request.getExpectedEntryTime().isBefore(LocalDateTime.now().plusMinutes(depositWindowMinutes))) {
+            throw new BusinessRuleException(
+                    "Giờ vào phải cách hiện tại ít nhất " + depositWindowMinutes + " phút");
+        }
 
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user"));
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy loại xe"));
 
         checkQuota(request, vehicleType);
 
         PricingPolicy policy = pricingPolicyRepository
                 .findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(
                         vehicleType.getVehicleTypeId(), "Active")
-                .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
+                .orElseThrow(() -> new ResourceNotFoundException("Chưa có bảng giá cho loại xe này"));
         if (policy.getBasePrice() == null) {
             throw new BusinessRuleException(
-                    "Bang gia cho loai xe nay chua duoc cau hinh (thieu gia co ban)",
+                    "Bảng giá cho loại xe này chưa được cấu hình (thiếu giá cơ bản)",
                     "PRICING_NOT_CONFIGURED");
         }
         // Coc = depositPercent cua TONG phi uoc tinh cho ca khung gio dat (base + gio vuot +
@@ -89,23 +98,28 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public ReservationQuoteDTO quote(Integer vehicleTypeId, LocalDateTime entryTime, LocalDateTime exitTime) {
         if (!exitTime.isAfter(entryTime)) {
-            throw new BusinessRuleException("Gio ra phai sau gio vao");
+            throw new BusinessRuleException("Giờ ra phải sau giờ vào");
         }
         BigDecimal fee = pricingService.calculateFee(vehicleTypeId, entryTime, exitTime);
         return new ReservationQuoteDTO(fee, depositFor(fee));
     }
 
+    private static final BigDecimal DEPOSIT_ROUNDING_UNIT = BigDecimal.valueOf(1000);
+
     /**
      * Tien coc = depositPercent cua tong phi uoc tinh. depositPercent duoc chap nhan o CA HAI
      * dang de tranh loi don vi: phan tram (vd 50) HOAC phan so (0.5) — gia tri > 1 duoc coi la
      * phan tram va chia 100. Nho vay Manager nhap 50 (= 50%) khong con bi tinh thanh 50 lan phi.
+     * Lam tron XUONG boi so cua 1.000d (vd 22.500 -> 22.000) — coc le khong chia het 1.000 gay
+     * kho khan khi thanh toan/doi soat tien mat va khong khop menh gia thuc te.
      */
     private BigDecimal depositFor(BigDecimal estimatedFee) {
         BigDecimal pct = feeConfigService.getFeeConfig().getDepositPercent();
         BigDecimal fraction = pct.compareTo(BigDecimal.ONE) > 0
                 ? pct.divide(BigDecimal.valueOf(100))
                 : pct;
-        return estimatedFee.multiply(fraction);
+        BigDecimal deposit = estimatedFee.multiply(fraction);
+        return deposit.divide(DEPOSIT_ROUNDING_UNIT, 0, RoundingMode.FLOOR).multiply(DEPOSIT_ROUNDING_UNIT);
     }
 
     /**
@@ -136,7 +150,7 @@ public class ReservationService {
 
         if (currentBooked >= quotaLimit) {
             throw new BusinessRuleException(
-                    "Khung gio nay da het quota dat cho (" + currentBooked + "/" + quotaLimit + ")",
+                    "Khung giờ nay đã hết quota đặt cho (" + currentBooked + "/" + quotaLimit + ")",
                     "QUOTA_FULL");
         }
     }
@@ -149,14 +163,14 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public List<Reservation> findMyReservations(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay user"));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy user"));
         return reservationRepository.findByUser_UserId(user.getUserId());
     }
 
     @Transactional(readOnly = true)
     public Reservation findById(UUID id) {
         return reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking #" + id));
     }
 
     /**
@@ -166,9 +180,9 @@ public class ReservationService {
     @Transactional(readOnly = true)
     public ReservationDTO findByIdAsDto(UUID id, String username, boolean isPrivileged) {
         Reservation reservation = reservationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay booking #" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy booking #" + id));
         if (!isPrivileged && !reservation.getUser().getUsername().equals(username)) {
-            throw new BusinessRuleException("Ban khong co quyen xem booking nay");
+            throw new BusinessRuleException("Bạn không có quyền truy cập booking này");
         }
         return ReservationDTO.from(reservation);
     }
@@ -177,10 +191,10 @@ public class ReservationService {
     public Reservation cancel(UUID id, String username) {
         Reservation reservation = findById(id);
         if (!reservation.getUser().getUsername().equals(username)) {
-            throw new BusinessRuleException("Ban khong co quyen huy booking nay");
+            throw new BusinessRuleException("Bạn không có quyền hủy booking này");
         }
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
-            throw new BusinessRuleException("Booking khong the huy o trang thai hien tai");
+            throw new BusinessRuleException("Booking không thể hủy ở trạng thái hiện tại");
         }
         // Cua so huy 3 gio CHI ap dung cho driver tu huy — khong ap cho scheduler (no-show /
         // het han coc) hay cascade bao tri, vi nhung luong do co the cham booking sat/qua gio vao.
@@ -188,7 +202,7 @@ public class ReservationService {
                 LocalDateTime.now(), reservation.getExpectedEntryTime());
         if (hoursUntilEntry < 3) {
             throw new BusinessRuleException(
-                    "Khong the huy booking trong vong 3 gio truoc gio vao",
+                    "Không thể hủy booking trong vòng 3 giờ trước giờ vào",
                     "CANCEL_TOO_LATE");
         }
         return cancelWithRefund(reservation, "Cancelled", true);
@@ -222,10 +236,14 @@ public class ReservationService {
     public Reservation confirmDeposit(UUID id, String username, Long orderCode) {
         Reservation reservation = findById(id);
         if (!reservation.getUser().getUsername().equals(username)) {
-            throw new BusinessRuleException("Ban khong co quyen thanh toan booking nay");
+            throw new BusinessRuleException("Bạn không có quyền thanh toán booking này");
         }
-        if (!"Pending".equals(reservation.getStatus())) {
-            throw new BusinessRuleException("Booking khong o trang thai cho thanh toan coc");
+        // Cho phep ca "Expired": scheduler co the da het han booking trong luc khach van dang thanh
+        // toan tren PayOS (xem SessionExpiryScheduler.expireUnpaidReservations). Chi khi goi PayOS
+        // ben duoi xac nhan PAID moi thuc su "hoi sinh" booking (markPaymentPaid); neu PayOS xac nhan
+        // chua thanh toan thi van bao loi nhu cu, chi la loi chinh xac hon (tra ve tu PayOS that).
+        if (!"Pending".equals(reservation.getStatus()) && !"Expired".equals(reservation.getStatus())) {
+            throw new BusinessRuleException("Booking không ở trạng thái cho thanh toán coc");
         }
 
         // Uu tien orderCode PayOS tra ve (giao dich thuc su da thanh toan). Neu thieu, fallback ve
@@ -234,18 +252,18 @@ public class ReservationService {
         Payment payment;
         if (orderCode != null) {
             payment = paymentRepository.findFirstByTransactionReference(String.valueOf(orderCode))
-                    .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich " + orderCode));
+                    .orElseThrow(() -> new BusinessRuleException("Không tìm thấy giao dịch " + orderCode));
             if (payment.getReservation() == null
                     || !payment.getReservation().getReservationId().equals(id)) {
-                throw new BusinessRuleException("Giao dich khong thuoc booking nay");
+                throw new BusinessRuleException("Giao dịch không thuộc booking này");
             }
         } else {
             payment = paymentRepository.findFirstByReservation_ReservationIdOrderByPaymentIdDesc(id)
-                    .orElseThrow(() -> new BusinessRuleException("Khong tim thay giao dich cho booking nay"));
+                    .orElseThrow(() -> new BusinessRuleException("Không tìm thấy giao dịch cho booking này"));
         }
 
         if (payment.getTransactionReference() == null) {
-            throw new BusinessRuleException("Giao dich khong co ma tham chieu (orderCode)");
+            throw new BusinessRuleException("Giao dịch không có mã tham chiếu (orderCode)");
         }
 
         payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));

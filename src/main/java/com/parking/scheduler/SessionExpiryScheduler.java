@@ -1,13 +1,17 @@
 package com.parking.scheduler;
 
+import com.parking.common.exception.BusinessRuleException;
 import com.parking.entity.IncidentReport;
 import com.parking.entity.ParkingSession;
+import com.parking.entity.Payment;
 import com.parking.entity.Reservation;
 import com.parking.entity.User;
+import com.parking.modules.driver.PayosService;
 import com.parking.modules.driver.ReservationService;
 import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.IncidentReportRepository;
 import com.parking.repository.ParkingSessionRepository;
+import com.parking.repository.PaymentRepository;
 import com.parking.repository.ReservationRepository;
 import com.parking.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Cac tac vu nen dinh ky de don dep phien/booking "treo" ma khong ai xu ly qua
@@ -63,6 +68,8 @@ public class SessionExpiryScheduler {
     private final UserRepository userRepository;
     private final ReservationService reservationService;
     private final FeeConfigService feeConfigService;
+    private final PaymentRepository paymentRepository;
+    private final PayosService payosService;
 
     /**
      * Moi 5 phut: phien "Admitted" qua 15 phut ma chua duoc ghi o thuc te (Parked)
@@ -131,6 +138,11 @@ public class SessionExpiryScheduler {
      * Moi 5 phut: booking con "Pending" (chua thanh toan coc) qua cua so cho phep thanh toan
      * (tinh tu createdAt) -> tu dong "Expired" de nha lai suc chua/quota dang bi giu. Cua so
      * cau hinh qua SystemConfig key DEPOSIT_PAYMENT_WINDOW_MINUTES (mac dinh 15 phut).
+     *
+     * Neu booking da co mot Payment "Pending" (khach thuc su da mo trang thanh toan PayOS) thi
+     * KHONG het han chi vi qua gio dong ho — hoi PayOS truc tiep truoc (verifyPaymentStatus) de
+     * biet giao dich that su thanh cong hay chua, tranh dung dong ho doan mo trong luc khach van
+     * dang thanh toan (xem bug: khach tra tien xong nhung booking da bi Expired truoc do).
      */
     @Scheduled(fixedDelay = 5 * 60 * 1000)
     public void expireUnpaidReservations() {
@@ -139,6 +151,34 @@ public class SessionExpiryScheduler {
 
         List<Reservation> unpaid = reservationRepository.findByStatusAndCreatedAtBefore("Pending", cutoff);
         for (Reservation reservation : unpaid) {
+            Optional<Payment> latestPayment = paymentRepository
+                    .findFirstByReservation_ReservationIdOrderByPaymentIdDesc(reservation.getReservationId());
+
+            if (latestPayment.isPresent() && "Pending".equals(latestPayment.get().getPaymentStatus())
+                    && latestPayment.get().getTransactionReference() != null) {
+                String orderCode = latestPayment.get().getTransactionReference();
+                try {
+                    // Neu PayOS xac nhan PAID, verifyPaymentStatus tu no da "hoi sinh" reservation
+                    // (markPaymentPaid) — khong nem loi, chi can bo qua khong het han o day.
+                    payosService.verifyPaymentStatus(Long.parseLong(orderCode));
+                    log.info("Reservation {} van 'Pending' qua han nhung PayOS xac nhan da thanh toan "
+                            + "(orderCode={}) -> khong het han, da duoc xac nhan coc",
+                            reservation.getReservationId(), orderCode);
+                    continue;
+                } catch (BusinessRuleException e) {
+                    if (!"PAYMENT_NOT_PAID".equals(e.getErrorCode())) {
+                        // Loi goi PayOS that su (PAYOS_ERROR, v.v.) — khong the biet chac trang thai,
+                        // bo qua lan chay nay, thu lai o chu ky 5 phut ke tiep thay vi doan bua het han.
+                        log.warn("Reservation {} bo qua lan nay: khong hoi duoc PayOS (orderCode={}): {}",
+                                reservation.getReservationId(), orderCode, e.getMessage());
+                        continue;
+                    }
+                    // PAYMENT_NOT_PAID: PayOS xac nhan that su chua thanh toan -> het han binh thuong ben duoi.
+                    log.info("Reservation {} qua han va PayOS xac nhan chua thanh toan (orderCode={})",
+                            reservation.getReservationId(), orderCode);
+                }
+            }
+
             reservationService.cancelWithRefund(reservation, "Expired", false);
             log.warn("Reservation {} auto-expired: deposit not paid within {} minutes",
                     reservation.getReservationId(), windowMinutes);
