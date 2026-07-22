@@ -1,7 +1,7 @@
 package com.parking.repository;
 
 import com.parking.entity.SystemConfig;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.mongodb.repository.MongoRepository;
 
-public interface SystemConfigRepository extends JpaRepository<SystemConfig, String> {
+public interface SystemConfigRepository extends MongoRepository<SystemConfig, String> {
 }

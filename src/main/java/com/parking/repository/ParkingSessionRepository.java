@@ -1,28 +1,41 @@
 package com.parking.repository;
 
 import com.parking.entity.ParkingSession;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.mongodb.repository.CountQuery;
+import org.springframework.data.mongodb.repository.ExistsQuery;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
-public interface ParkingSessionRepository extends JpaRepository<ParkingSession, Long> {
-    @Query("SELECT p FROM ParkingSession p WHERE p.licensePlateIn = :licensePlateIn AND p.status IN :statuses")
-    Optional<ParkingSession> findFirstByLicensePlateInAndStatusIn(@Param("licensePlateIn") String licensePlateIn, @Param("statuses") List<String> statuses);
+public interface ParkingSessionRepository extends MongoRepository<ParkingSession, Long> {
+
+    @Query("{ 'licensePlateIn': ?0, 'status': { $in: ?1 } }")
+    Optional<ParkingSession> findFirstByLicensePlateInAndStatusIn(String licensePlateIn, List<String> statuses);
+
     List<ParkingSession> findByStatusIn(List<String> statuses);
+
+    @Query("{ 'driver.$id': ?0 }")
     List<ParkingSession> findByDriver_UserId(Long userId);
+
+    @Query("{ 'driver.$id': ?0, 'status': { $in: ?1 } }")
     List<ParkingSession> findByDriver_UserIdAndStatusIn(Long userId, List<String> statuses);
+
+    @CountQuery("{ 'vehicleType.$id': ?0, 'status': { $in: ?1 } }")
     long countByVehicleType_VehicleTypeIdAndStatusIn(Integer vehicleTypeId, List<String> statuses);
+
     long countByStatusIn(List<String> statuses);
+
     List<ParkingSession> findByEntryTimeBetween(LocalDateTime from, LocalDateTime to);
+
     List<ParkingSession> findByStatusAndEntryTimeBetween(String status, LocalDateTime from, LocalDateTime to);
 
-    /** Phien "Admitted" qua lau khong co tien trien (chua duoc ghi o thuc te / check-out) -> nghi van bo xe/loiterer. */
+    /** Phien "Admitted" qua lau khong co tien trien -> nghi van bo xe/loiterer. */
     List<ParkingSession> findByStatusAndEntryTimeBefore(String status, LocalDateTime threshold);
 
-    /** Dung de chan xoa mot Gate dang/da duoc tham chieu boi lich su phien (EntryGateID hoac ExitGateID). */
+    /** Dung de chan xoa mot Gate dang/da duoc tham chieu boi lich su phien. */
+    @ExistsQuery("{ $or: [ { 'entryGate.$id': ?0 }, { 'exitGate.$id': ?1 } ] }")
     boolean existsByEntryGate_GateIdOrExitGate_GateId(Integer entryGateId, Integer exitGateId);
 }

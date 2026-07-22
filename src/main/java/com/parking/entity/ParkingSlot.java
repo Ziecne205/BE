@@ -1,10 +1,12 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "ParkingSlots")
+@Document(collection = "ParkingSlots")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,24 +15,18 @@ import lombok.*;
 public class ParkingSlot {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "SlotID")
     private Long slotId;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "FloorID", nullable = false)
+    @DBRef
     private Floor floor;
 
-    @Column(name = "Zone")
     private String zone;
 
-    @Column(name = "SlotCode", nullable = false, unique = true)
+    @Indexed(unique = true)
     private String slotCode;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "VehicleTypeID", nullable = false)
+    @DBRef
     private VehicleType vehicleType;
 
-    @Column(name = "Status")
     private String status; // Available, Occupied, Maintenance — chỉ camera CV hoặc Manager đổi
 }

@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # Render cap PORT qua bien moi truong; mac dinh 8080 khi chay local.
+  port: ${PORT:8080}
   servlet:
     encoding:
       charset: UTF-8
@@ -7,40 +8,48 @@ server:
       enabled: true
 
 spring:
-  datasource:
-    url: jdbc:sqlserver://localhost:1433;databaseName=ParkingDB;encrypt=true;trustServerCertificate=true
-    username: sa
-    password: 12345
-    driver-class-name: com.microsoft.sqlserver.jdbc.SQLServerDriver
-  jpa:
-    hibernate:
-      ddl-auto: validate
-      naming:
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
-    open-in-view: true
+  data:
+    mongodb:
+      # Connection string MongoDB Atlas. Dat qua bien moi truong MONGODB_URI tren Render.
+      # Vi du: mongodb+srv://user:pass@cluster0.xxxxx.mongodb.net/ParkingDB?retryWrites=true&w=majority
+      uri: ${MONGODB_URI:mongodb://localhost:27017/ParkingDB}
+      # Tu tao index tu annotation @Indexed (unique username/email/...).
+      auto-index-creation: true
   jackson:
     serialization:
       write-dates-as-timestamps: false
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:khointnse180532@fpt.edu.vn}
-    password: ${MAIL_PASSWORD:dvak avio wmes htey}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     protocol: smtps
     properties:
       mail:
+        # Timeout 5s: khi mail chua cau hinh / sai App Password, request gui OTP BAO LOI NHANH
+        # thay vi treo vo han (lam ket nut "Dang gui ma..." o FE va can thread tren Render free).
         smtp:
           auth: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
           ssl:
             enable: true
           starttls:
             enable: true
         smtps:
           auth: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# Gui email OTP qua SendGrid API (HTTPS) — Render chan SMTP nen khong dung spring.mail nua.
+sendgrid:
+  api-key: ${SENDGRID_API_KEY:}
+mail:
+  # Email nguoi gui PHAI da xac minh trong SendGrid (Single Sender Verification).
+  sender-email: ${MAIL_SENDER:}
+  sender-name: ${MAIL_SENDER_NAME:Parking System}
 
 springdoc:
   swagger-ui:

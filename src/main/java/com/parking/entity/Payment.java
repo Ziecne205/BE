@@ -1,14 +1,15 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-@Entity
-@Table(name = "Payments")
+@Document(collection = "Payments")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -17,32 +18,23 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public class Payment {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "PaymentID")
     private Long paymentId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "SessionID")
+    @DBRef
     @JsonIgnore
     private ParkingSession session;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ReservationID")
+    @DBRef
     @JsonIgnore
     private Reservation reservation;
 
-    @Column(name = "Amount", nullable = false)
     private BigDecimal amount;
 
-    @Column(name = "PaymentMethod", nullable = false)
     private String paymentMethod;
 
-    @Column(name = "PaymentTime", nullable = false)
     private LocalDateTime paymentTime;
 
-    @Column(name = "PaymentStatus")
     private String paymentStatus; // Success, Failed, Pending
 
-    @Column(name = "TransactionReference")
     private String transactionReference;
 }

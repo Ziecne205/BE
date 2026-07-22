@@ -55,6 +55,17 @@ public class PayosService {
     @Value("${payos.cancel-url:http://localhost:3000/driver/payment/return?cancel=true}")
     private String cancelUrl;
 
+    /** Cat khoang trang/xuong dong thua khi copy-paste key vao bien moi truong — tranh loi
+     *  "Illegal character(s) in message header value" khi dat key vao HTTP header (x-client-id...). */
+    @jakarta.annotation.PostConstruct
+    void normalizeConfig() {
+        if (clientId != null) clientId = clientId.trim();
+        if (apiKey != null) apiKey = apiKey.trim();
+        if (checksumKey != null) checksumKey = checksumKey.trim();
+        if (returnUrl != null) returnUrl = returnUrl.trim();
+        if (cancelUrl != null) cancelUrl = cancelUrl.trim();
+    }
+
     private final ReservationRepository reservationRepository;
     private final PaymentRepository paymentRepository;
     // Timeout ket noi/doc bat buoc: khong de mot lan goi PayOS treo vo han giu ket noi DB

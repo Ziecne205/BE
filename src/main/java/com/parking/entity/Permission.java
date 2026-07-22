@@ -1,10 +1,11 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "Permissions")
+@Document(collection = "Permissions")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,13 +14,10 @@ import lombok.*;
 public class Permission {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "PermissionID")
     private Integer permissionId;
 
-    @Column(name = "PermissionCode", nullable = false, unique = true)
+    @Indexed(unique = true)
     private String permissionCode;
 
-    @Column(name = "Description")
     private String description;
 }

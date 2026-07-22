@@ -33,9 +33,13 @@ public class SecurityConfig {
     private final JwtAuthFilter jwtAuthFilter;
     private final RestAuthenticationEntryPoint restAuthenticationEntryPoint;
 
-    /** Cac origin FE duoc phep goi API (cau hinh qua app.cors.allowed-origins, phan cach bang dau phay). */
+    /** Cac origin FE duoc phep goi API (cau hinh qua app.cors.allowed-origins, phan cach bang dau phay).
+     *  Ho tro wildcard (setAllowedOriginPatterns): vd https://*.vercel.app cho phep MOI project Vercel. */
     @Value("${app.cors.allowed-origins:http://localhost:3000,http://localhost:3001,http://localhost:5173}")
     private List<String> allowedOrigins;
+
+    /** Luon cho phep moi preview/production tren Vercel — nhieu thanh vien deploy FE rieng deu test chung 1 BE. */
+    private static final List<String> DEFAULT_ORIGIN_PATTERNS = List.of("https://*.vercel.app");
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -83,9 +87,12 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Chi cho phep cac origin da cau hinh — khong dung "*" cung voi allowCredentials(true)
-        // vi trinh duyet se tu choi, va vi day la lo hong bao mat (bat ky site nao cung goi duoc).
-        configuration.setAllowedOrigins(allowedOrigins);
+        // Dung setAllowedOriginPatterns (ho tro wildcard) thay cho setAllowedOrigins — cho phep
+        // moi domain *.vercel.app (nhieu nguoi deploy FE rieng) VA cac origin cau hinh them qua env.
+        // Van khong dung "*" tran de giu allowCredentials(true) hop le va khong mo cho moi site.
+        List<String> originPatterns = new java.util.ArrayList<>(allowedOrigins);
+        originPatterns.addAll(DEFAULT_ORIGIN_PATTERNS);
+        configuration.setAllowedOriginPatterns(originPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

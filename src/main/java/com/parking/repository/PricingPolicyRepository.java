@@ -1,20 +1,20 @@
 package com.parking.repository;
 
 import com.parking.entity.PricingPolicy;
-import org.springframework.data.jpa.repository.EntityGraph;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.lang.NonNull;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 
 import java.util.List;
 import java.util.Optional;
 
-public interface PricingPolicyRepository extends JpaRepository<PricingPolicy, Integer> {
-    Optional<PricingPolicy> findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(Integer vehicleTypeId, String status);
-    List<PricingPolicy> findByVehicleType_VehicleTypeIdOrderByEffectiveDateDesc(Integer vehicleTypeId);
-    List<PricingPolicy> findByVehicleType_VehicleTypeIdAndStatus(Integer vehicleTypeId, String status);
+public interface PricingPolicyRepository extends MongoRepository<PricingPolicy, Integer> {
 
-    @Override
-    @NonNull
-    @EntityGraph(attributePaths = {"vehicleType"})
-    List<PricingPolicy> findAll();
+    @Query(value = "{ 'vehicleType.$id': ?0, 'status': ?1 }", sort = "{ 'effectiveDate': -1 }")
+    Optional<PricingPolicy> findFirstByVehicleType_VehicleTypeIdAndStatusOrderByEffectiveDateDesc(Integer vehicleTypeId, String status);
+
+    @Query(value = "{ 'vehicleType.$id': ?0 }", sort = "{ 'effectiveDate': -1 }")
+    List<PricingPolicy> findByVehicleType_VehicleTypeIdOrderByEffectiveDateDesc(Integer vehicleTypeId);
+
+    @Query("{ 'vehicleType.$id': ?0, 'status': ?1 }")
+    List<PricingPolicy> findByVehicleType_VehicleTypeIdAndStatus(Integer vehicleTypeId, String status);
 }

@@ -1,13 +1,14 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-@Entity
-@Table(name = "Feedback")
+@Document(collection = "Feedback")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,26 +17,19 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public class Feedback {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "FeedbackID")
     private Long feedbackId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "SessionID", nullable = false)
+    @DBRef
     @JsonIgnore
     private ParkingSession session;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "UserID", nullable = false)
+    @DBRef
     @JsonIgnore
     private User user;
 
-    @Column(name = "Rating", nullable = false)
     private Integer rating; // 1-5
 
-    @Column(name = "Comment")
     private String comment;
 
-    @Column(name = "CreatedAt")
     private LocalDateTime createdAt;
 }

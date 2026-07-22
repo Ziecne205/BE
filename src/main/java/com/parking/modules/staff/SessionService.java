@@ -381,11 +381,10 @@ public class SessionService {
 
         // Pha 3 (tx ngan): luu Payment "Pending" theo orderCode de webhook/polling doi chieu khi
         // khach thanh toan, va de check-out nhan ra (tranh thu phi 2 lan). So tien luu = so tien
-        // thuc gui PayOS (sau khi ap san toi thieu), khop voi thuc te. getReferenceById chi lay proxy
-        // de set khoa ngoai SessionID, khong ton them SELECT.
+        // thuc gui PayOS (sau khi ap san toi thieu), khop voi thuc te.
         tx.executeWithoutResult(status ->
                 paymentRepository.save(Payment.builder()
-                        .session(sessionRepository.getReferenceById(quote.sessionId()))
+                        .session(sessionRepository.findById(quote.sessionId()).orElseThrow())
                         .amount(BigDecimal.valueOf(link.getAmount()))
                         .paymentMethod("PayOS")
                         .paymentTime(LocalDateTime.now())

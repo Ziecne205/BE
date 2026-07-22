@@ -1,25 +1,23 @@
 package com.parking.repository;
 
 import com.parking.entity.Payment;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public interface PaymentRepository extends JpaRepository<Payment, Long> {
+public interface PaymentRepository extends MongoRepository<Payment, Long>, PaymentRepositoryCustom {
 
     List<Payment> findByPaymentTimeBetween(LocalDateTime from, LocalDateTime to);
 
-    @Query("SELECT COALESCE(SUM(p.amount), 0) FROM Payment p WHERE p.paymentTime BETWEEN :from AND :to AND p.paymentStatus = 'Success'")
-    BigDecimal sumRevenueByPeriod(@Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
-
+    @Query("{ 'session.$id': ?0 }")
     List<Payment> findBySession_SessionId(Long sessionId);
 
-    java.util.Optional<Payment> findFirstByTransactionReference(String transactionReference);
+    Optional<Payment> findFirstByTransactionReference(String transactionReference);
 
-    java.util.Optional<Payment> findFirstByReservation_ReservationIdOrderByPaymentIdDesc(UUID reservationId);
+    @Query(value = "{ 'reservation.$id': ?0 }", sort = "{ 'paymentId': -1 }")
+    Optional<Payment> findFirstByReservation_ReservationIdOrderByPaymentIdDesc(UUID reservationId);
 }

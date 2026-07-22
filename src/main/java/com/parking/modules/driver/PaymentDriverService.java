@@ -159,7 +159,7 @@ public class PaymentDriverService {
         // Pha 3 (tx ngan): luu Payment "Pending" theo orderCode de webhook/check-out doi chieu.
         tx.executeWithoutResult(status ->
                 paymentRepository.save(Payment.builder()
-                        .session(sessionRepository.getReferenceById(quote.sessionId()))
+                        .session(sessionRepository.findById(quote.sessionId()).orElseThrow())
                         .amount(BigDecimal.valueOf(link.getAmount()))
                         .paymentMethod("PayOS")
                         .paymentTime(LocalDateTime.now())
