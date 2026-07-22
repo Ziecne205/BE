@@ -1,9 +1,11 @@
 package com.parking.modules.manager;
 
+import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.AuditLogWriter;
 import com.parking.entity.PricingPolicy;
 import com.parking.entity.VehicleType;
+import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.PricingPolicyRepository;
 import com.parking.repository.VehicleTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +24,11 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PricingPolicyService {
 
+    private static final List<String> ACTIVE_SESSION_STATUSES = List.of("Admitted", "Parked", "Moved");
+
     private final PricingPolicyRepository pricingPolicyRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
+    private final ParkingSessionRepository parkingSessionRepository;
     private final AuditLogWriter auditLogService;
 
     public List<PricingPolicy> findAll() {
@@ -70,6 +75,11 @@ public class PricingPolicyService {
 
     @Transactional
     public PricingPolicy update(Integer id, PricingPolicyRequest request, String actorUsername) {
+        if (parkingSessionRepository.countByStatusIn(ACTIVE_SESSION_STATUSES) > 0) {
+            throw new BusinessRuleException(
+                    "Khong the sua bang gia khi con phien do xe dang hoat dong",
+                    "ACTIVE_SESSIONS_EXIST");
+        }
         PricingPolicy policy = findById(id);
         VehicleType vt = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(

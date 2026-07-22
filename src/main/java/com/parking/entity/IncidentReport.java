@@ -2,6 +2,7 @@ package com.parking.entity;
 
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -44,6 +45,16 @@ public class IncidentReport {
     private String resolutionNotes;
 
     private LocalDateTime createdAt;
+
+    /** Moc thoi gian Staff nhan xu ly su co — co so cho job escalate su co bi ket (Phase 6). */
+    private LocalDateTime takenOverAt;
+
+    /** Da bi escalate roi hay chua — tranh job escalate chay lai nhieu lan tren cung 1 su co. */
+    private LocalDateTime escalatedAt;
+
+    /** Optimistic locking cho thao tac take-over nguyen tu (Phase 6). */
+    @Version
+    private Long version;
 
     // Các Getter này phơi ID phẳng ra JSON (ref bị @JsonIgnore).
     public Long getSessionId() {

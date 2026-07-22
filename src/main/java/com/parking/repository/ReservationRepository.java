@@ -28,6 +28,9 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     /** Booking chua check-in nhung da qua gio du kien ra -> no-show. */
     List<Reservation> findByStatusInAndExpectedExitTimeBefore(List<String> statuses, LocalDateTime threshold);
 
+    /** Thay the ham tren o Phase 3: no-show tinh theo checkinDeadline (gia han theo bac) thay vi expectedExitTime thuan. */
+    List<Reservation> findByStatusInAndCheckinDeadlineBefore(List<String> statuses, LocalDateTime threshold);
+
     /** Booking con "Pending" (chua thanh toan coc) qua han cua so thanh toan tinh tu luc tao. */
     List<Reservation> findByStatusAndCreatedAtBefore(String status, LocalDateTime threshold);
 
@@ -35,4 +38,11 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     @Query(value = "{ 'vehicleType.$id': ?0, 'status': { $in: ?1 } }", sort = "{ 'createdAt': -1 }")
     List<Reservation> findByVehicleType_VehicleTypeIdAndStatusInOrderByCreatedAtDesc(
             Integer vehicleTypeId, List<String> statuses);
+
+    @CountQuery("{ 'user.$id': ?0, 'status': { $in: ?1 } }")
+    long countByUser_UserIdAndStatusIn(Long userId, List<String> statuses);
+
+    @Query("{ 'licensePlate': ?0, 'status': { $in: ?1 }, 'expectedExitTime': { $gt: ?2 }, 'expectedEntryTime': { $lt: ?3 } }")
+    List<Reservation> findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
+            String licensePlate, List<String> statuses, LocalDateTime start, LocalDateTime end);
 }

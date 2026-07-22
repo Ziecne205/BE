@@ -15,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api/manager/booking-quotas")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Booking Quotas", description = "Cau hinh tran dat cho theo khung gio va loai xe (Phan he 1 - muc 2.3)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class BookingQuotaController {
 
     private final BookingQuotaService bookingQuotaService;

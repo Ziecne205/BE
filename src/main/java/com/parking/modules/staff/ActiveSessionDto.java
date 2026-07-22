@@ -23,4 +23,8 @@ public class ActiveSessionDto {
     private long parkedMinutes;
     /** Phi tam tinh theo bang gia hien hanh cho thoi luong da do den hien tai (null neu chua co bang gia). */
     private java.math.BigDecimal estimatedFee;
+    /** Da qua expectedExitTime+30' ma van chua check-out (SessionExpiryScheduler.flagOverstaySessions) —
+     * tach rieng de dashboard bao "N xe qua han" ma KHONG loai xe nay khoi suc chua/headroom
+     * (xe van dang chiem cho vat ly). */
+    private boolean isOverstayFlagged;
 }

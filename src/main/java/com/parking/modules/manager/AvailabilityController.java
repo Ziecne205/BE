@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/manager/availability")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Availability", description = "Cho trong real-time theo loai xe (headroom + zone)")
-@PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+@PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
 public class AvailabilityController {
 
     private final AvailabilityService availabilityService;

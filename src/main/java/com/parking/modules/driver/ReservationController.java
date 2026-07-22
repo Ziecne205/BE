@@ -69,4 +69,13 @@ public class ReservationController {
         reservationService.confirmDeposit(id, auth.getName(), orderCode);
         return ApiResponse.ok("Thanh toan coc thanh cong", Map.of("success", true));
     }
+
+    @PostMapping("/{id}/extend")
+    public ApiResponse<ExtendReservationResponse> extendReservation(
+            @PathVariable UUID id,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime newExitTime,
+            Authentication auth) {
+        return ApiResponse.ok("Gia han thanh cong, vui long thanh toan phi gia han",
+                reservationService.extendReservation(id, auth.getName(), newExitTime));
+    }
 }

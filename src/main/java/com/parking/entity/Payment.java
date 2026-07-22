@@ -37,4 +37,13 @@ public class Payment {
     private String paymentStatus; // Success, Failed, Pending
 
     private String transactionReference;
+
+    // Phan biet giao dich nay la coc/phi checkout/gia han/hoan tien — can thiet tu khi phi gia
+    // han (Phase 5) co the ton tai song song voi giao dich coc/phi goc tren cung 1 booking/phien.
+    private String paymentPurpose; // Deposit, Fee, Extension, Refund
+
+    // Trang thai hoan tien PayOS (Phase 6) — null nghia la chua yeu cau hoan tien.
+    private String refundStatus; // null, Requested, AutoRefunded, ManualRequired, Failed
+
+    private LocalDateTime refundedAt;
 }

@@ -14,7 +14,7 @@ import java.util.List;
 @RequestMapping("/api/manager/floors")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Floors", description = "Quan ly so do tang (CRUD) - phan he Quan ly bai xe")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class FloorController {
 
     private final FloorService floorService;

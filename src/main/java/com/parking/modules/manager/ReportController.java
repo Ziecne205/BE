@@ -17,7 +17,7 @@ import java.time.LocalDate;
 @RequestMapping("/api/manager/reports")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Reports", description = "Bao cao va thong ke (Phan he 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class ReportController {
 
     private final ReportService reportService;

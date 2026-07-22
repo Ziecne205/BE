@@ -22,7 +22,11 @@ All endpoints return an enveloped response:
 
 ---
 
-## 2. Manager Role (`ROLE_MANAGER`, `ROLE_ADMIN`)
+## 2. Manager Role (`ROLE_MANAGER`)
+
+*Note: ADMIN no longer has access to this module — a recent RBAC cleanup restricted every endpoint
+below to `hasRole('MANAGER')` only (ADMIN tokens now get `403`). Section 5's Admin endpoints are a
+separate, unaffected set.*
 
 ### Floors & Slots
 | Method | Path | Request Body / Params | Description |
@@ -57,7 +61,7 @@ All endpoints return an enveloped response:
 | **PATCH** | `/api/manager/booking-quotas/{id}/toggle` | – | Toggle `isActive` |
 | **DELETE** | `/api/manager/booking-quotas/{id}` | – | Delete quota window |
 | **GET** | `/api/manager/fee-config` | – | **[NEW]** Get global fee configurations |
-| **PUT** | `/api/manager/fee-config` | `{ hourlyRate, depositPercent, overstayRatePerHour, noShowGraceMinutes, blacklistThreshold }` | **[NEW]** Update global fee configs |
+| **PUT** | `/api/manager/fee-config` | `{ hourlyRate, depositPercent, overstayRatePerHour, noShowGraceMinutes, blacklistThreshold, depositPaymentWindowMinutes?, cashToleranceVnd? }` | **[NEW]** Update global fee configs. Rejects with `ACTIVE_SESSIONS_EXIST` if `depositPercent`/`overstayRatePerHour` change while any session is `Admitted`/`Parked`/`Moved` |
 
 ### Dashboard, Incidents & Reports
 | Method | Path | Request Body / Params | Description |
@@ -72,6 +76,14 @@ All endpoints return an enveloped response:
 | **GET** | `/api/manager/reports/revenue` | `?fromDate=&toDate=` | Revenue report |
 | **GET** | `/api/manager/reports/traffic` | `?fromDate=&toDate=` | Traffic (entries/exits) report |
 
+### Checkout Approvals & Payments
+| Method | Path | Request Body / Params | Description |
+|---|---|---|---|
+| **GET** | `/api/manager/checkout-approvals` | `?status=` (default `Open`) | **[NEW]** List checkouts held for approval because collected cash differed from the computed amount by more than `CASH_TOLERANCE_VND` |
+| **PATCH** | `/api/manager/checkout-approvals/{id}/approve` | – | **[NEW]** Finalize the checkout exactly as Staff originally requested (charges the reported cash amount, not the computed one) |
+| **PATCH** | `/api/manager/checkout-approvals/{id}/reject` | – | **[NEW]** Reject — the parking session stays open for Staff to redo the checkout |
+| **GET** | `/api/manager/payments` | `?refundStatus=` (e.g. `ManualRequired`) | **[NEW]** List/filter payments — currently used to find deposit refunds that need manual bank processing (PayOS has no automated refund API for this merchant) |
+
 ---
 
 ## 3. Staff Role (`ROLE_STAFF`, `ROLE_MANAGER`, `ROLE_ADMIN`)
@@ -82,7 +94,7 @@ All endpoints return an enveloped response:
 | **GET** | `/api/staff/sessions/active` | – | Currently open sessions |
 | **GET** | `/api/staff/sessions/search` | `?licensePlate=` | Find open session by plate |
 | **POST** | `/api/staff/sessions/check-in` | `{ licensePlate, vehicleTypeId, entryGateId, entryImageUrl?, reservationId? }` | Admits a vehicle, returns session with `isForceCheckIn` |
-| **POST** | `/api/staff/sessions/check-out` | `{ licensePlate, exitGateId, exitImageUrl?, paymentMethod?, lostTicket }` | Computes fee, frees slot, returns `isOverstay` |
+| **POST** | `/api/staff/sessions/check-out` | `{ licensePlate, exitGateId, exitImageUrl?, paymentMethod?, lostTicket, collectedAmount?, discountReason? }` | Computes fee, frees slot, returns `isOverstay`. **[NEW]** If `collectedAmount` is outside `CASH_TOLERANCE_VND` of the computed amount, `discountReason` becomes required and checkout does **not** complete — response comes back with `pendingApproval: true` + `approvalRequestId` instead, pending a Manager decision (see Checkout Approvals below) |
 | **POST** | `/api/staff/sessions/{id}/force-check-in`| `{ actualPlate, reason? }` | **[NEW]** Audited override for plate mismatches |
 
 ### Incidents (Staff)
@@ -112,10 +124,12 @@ All endpoints return an enveloped response:
 ### Reservations & Sessions
 | Method | Path | Request Body / Params | Description |
 |---|---|---|---|
+| **GET** | `/api/driver/reservations/quote` | `?vehicleTypeId=&entryTime=&exitTime=` | Estimated fee + deposit for a time window — no booking created |
 | **POST** | `/api/driver/reservations` | `{ vehicleTypeId, licensePlate, expectedEntryTime, expectedExitTime }` | Create booking, status `Pending` |
 | **GET** | `/api/driver/reservations/my` | – | Current user's bookings |
 | **PATCH** | `/api/driver/reservations/{id}/cancel` | – | Cancel own booking |
 | **POST** | `/api/driver/reservations/{id}/confirm-deposit`| – | Mark deposit Paid |
+| **POST** | `/api/driver/reservations/{id}/extend` | `{ newExitTime }` | **[NEW]** Extend booking. **No longer free** — prices the added time at the current live rate and returns `{ reservation, payment }` where `payment` is a PayOS link (`checkoutUrl, qrCode, orderCode, amount`) the driver must pay; if left unpaid it's still collected at checkout |
 | **GET** | `/api/driver/sessions/current` | – | Driver's currently open session |
 | **GET** | `/api/driver/sessions/history` | – | Driver's past sessions |
 

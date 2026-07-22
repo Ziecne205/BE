@@ -58,6 +58,9 @@ public class SessionExpiryScheduler {
 
     private static final int ADMITTED_STALE_MINUTES = 15;
     private static final int MOVED_STALE_MINUTES = 30;
+    private static final int RESERVATION_OVERSTAY_FLAG_MINUTES = 30;
+
+    private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked");
 
     private static final String ISSUE_TYPE_LOITERER = "Loiterer";
     private static final String ISSUE_TYPE_OVERSTAY = "Overstay";
@@ -116,18 +119,48 @@ public class SessionExpiryScheduler {
     }
 
     /**
-     * Moi 15 phut: booking qua han (expectedExitTime) ma van chua duoc khach nhan
-     * xe
-     * (status con Pending/Confirmed, chua CheckedIn) -> danh dau Expired + mat coc.
+     * Moi 5 phut: phien dang mo (Admitted/Parked) co reservation, qua reservation.expectedExitTime
+     * +30' ma van chua check-out -> danh dau isOverstayFlagged=true + tao IncidentReport (Overstay)
+     * de doi soat (item 5's "auto-incident at +30min" clause). KHONG loai xe khoi headroom/suc
+     * chua (xe van dang chiem cho vat ly, loai no ra se gay double-book) — chi phoi rieng
+     * isOverstayFlagged (xem ActiveSessionDto) de dashboard bao "N xe qua han" rieng biet.
+     * Da xac nhan lai cach hieu nay voi nguoi dung truoc khi lam — cach doc khac ("loai khoi
+     * headroom" = nha cho) se gay double-book that su.
      */
-    @Scheduled(fixedDelay = 15 * 60 * 1000)
+    @Scheduled(fixedDelay = 5 * 60 * 1000)
+    public void flagOverstaySessions() {
+        LocalDateTime now = LocalDateTime.now();
+        List<ParkingSession> openSessions = sessionRepository.findByStatusInAndIsOverstayFlaggedNot(OPEN_SESSION_STATUSES);
+        for (ParkingSession session : openSessions) {
+            Reservation reservation = session.getReservation();
+            if (reservation == null || reservation.getExpectedExitTime() == null) {
+                continue; // walk-in: khong co deadline dat truoc de doi chieu
+            }
+            if (reservation.getExpectedExitTime().plusMinutes(RESERVATION_OVERSTAY_FLAG_MINUTES).isBefore(now)) {
+                session.setIsOverstayFlagged(true);
+                sessionRepository.save(session);
+                createIncident(session, ISSUE_TYPE_OVERSTAY,
+                        "Phien #" + session.getSessionId() + " qua gio du kien (" + reservation.getExpectedExitTime()
+                                + ") hon " + RESERVATION_OVERSTAY_FLAG_MINUTES
+                                + " phut ma chua check-out - he thong tu dong bao qua han");
+                log.warn("Session {} flagged as overstay (reservation {} past expectedExitTime+{}min)",
+                        session.getSessionId(), reservation.getReservationId(), RESERVATION_OVERSTAY_FLAG_MINUTES);
+            }
+        }
+    }
+
+    /**
+     * Moi 5 phut: booking qua han check-in (checkinDeadline, cong thuc grace period theo Phase 3
+     * — xem ReservationService.computeGracePeriod) ma van chua duoc khach nhan xe (status con
+     * Pending/Confirmed, chua CheckedIn) -> danh dau Expired + mat coc. Chay moi 5 phut (thay vi
+     * 15) de booking khong the treo qua deadline (toi thieu 15 phut) den 20 phut nua moi bi xu ly.
+     */
+    @Scheduled(fixedDelay = 5 * 60 * 1000)
     public void expireNoShowReservations() {
         LocalDateTime now = LocalDateTime.now();
-        int graceMinutes = feeConfigService.getFeeConfig().getNoShowGraceMinutes();
-        LocalDateTime cutoffTime = now.minusMinutes(graceMinutes);
 
         List<Reservation> noShowReservations = reservationRepository
-                .findByStatusInAndExpectedExitTimeBefore(List.of("Pending", "Confirmed"), cutoffTime);
+                .findByStatusInAndCheckinDeadlineBefore(List.of("Pending", "Confirmed"), now);
         for (Reservation reservation : noShowReservations) {
             reservationService.cancelWithRefund(reservation, "Expired", false);
             log.warn("Reservation {} marked Expired (no-show) and deposit forfeited", reservation.getReservationId());

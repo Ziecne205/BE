@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.math.BigDecimal;
+
 @Getter
 @Setter
 public class CheckOutRequest {
@@ -21,4 +23,10 @@ public class CheckOutRequest {
 
     /** Danh dau xe bi mat ve de tinh phu phi LostTicketFee. */
     private boolean lostTicket;
+
+    /** So tien mat Staff thuc thu tai cong. Bo trong -> khong doi chieu, thu dung so he thong tinh. */
+    private BigDecimal collectedAmount;
+
+    /** Bat buoc neu collectedAmount lech qua CASH_TOLERANCE_VND so voi so he thong tinh. */
+    private String discountReason;
 }

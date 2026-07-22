@@ -65,4 +65,8 @@ public class ParkingSession {
     /** Session exceeded the pricing policy grace period at checkout (overstay surcharge applied). */
     @Builder.Default
     private Boolean isOverstay = false;
+
+    /** Session currently past expectedExitTime + 30min while still open (set by Phase 4's job) — distinct from isOverstay, which is only set at checkOut as a historical marker. */
+    @Builder.Default
+    private Boolean isOverstayFlagged = false;
 }

@@ -6,10 +6,14 @@ import com.parking.entity.*;
 import com.parking.repository.*;
 import com.parking.common.service.PricingService;
 import com.parking.modules.manager.FeeConfigService;
+import com.parking.modules.manager.FeeConfigResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,6 +40,7 @@ public class ReservationService {
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
     private final PricingService pricingService;
+    private final PlatformTransactionManager txManager;
 
     // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
     // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
@@ -64,6 +69,17 @@ public class ReservationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy loại xe"));
 
+        long activeCount = reservationRepository.countByUser_UserIdAndStatusIn(user.getUserId(), List.of("Pending", "Confirmed", "CheckedIn"));
+        if (activeCount >= 3) {
+            throw new BusinessRuleException("Một tài khoản chỉ được phép có tối đa 3 vé đang hoạt động", "MAX_RESERVATIONS_REACHED");
+        }
+
+        List<Reservation> overlaps = reservationRepository.findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
+                request.getLicensePlate(), List.of("Pending", "Confirmed", "CheckedIn"), request.getExpectedEntryTime(), request.getExpectedExitTime());
+        if (!overlaps.isEmpty()) {
+            throw new BusinessRuleException("Biển số này đã có đặt chỗ trong khung giờ bạn chọn", "LICENSE_PLATE_OVERLAP");
+        }
+
         checkQuota(request, vehicleType);
 
         PricingPolicy policy = pricingPolicyRepository
@@ -80,7 +96,8 @@ public class ReservationService {
         // tinh ben Driver va phi checkout de ca ba luon khop nhau. Xem depositFor() ve don vi %.
         BigDecimal estimatedFee = pricingService.calculateFee(
                 policy, request.getExpectedEntryTime(), request.getExpectedExitTime());
-        BigDecimal deposit = depositFor(estimatedFee);
+        FeeConfigResponse feeConfig = feeConfigService.getFeeConfig();
+        BigDecimal deposit = depositFor(estimatedFee, feeConfig);
 
         Reservation reservation = Reservation.builder()
                 .user(user)
@@ -89,11 +106,59 @@ public class ReservationService {
                 .expectedEntryTime(request.getExpectedEntryTime())
                 .expectedExitTime(request.getExpectedExitTime())
                 .depositAmount(deposit)
+                .priceAtBookingTime(policy.getBasePrice())
+                // Snapshot toan bo cac thanh phan gia tai thoi diem dat cho (Phase 2) - xem ghi chu
+                // tai field tuong ung trong Reservation de biet ly do.
+                .baseHoursAtBooking(policy.getBaseHours())
+                .extraHourPriceAtBooking(policy.getExtraHourPrice())
+                .nightSurchargeAtBooking(policy.getNightSurcharge())
+                .lostTicketFeeAtBooking(policy.getLostTicketFee())
+                .depositPercentAtBooking(feeConfig.getDepositPercent())
+                .overstayRatePerHourAtBooking(feeConfig.getOverstayRatePerHour())
+                .estimatedFeeAtBooking(estimatedFee)
+                .originalExpectedExitTime(request.getExpectedExitTime())
                 .depositStatus("Pending") // FE chuyen sang thanh toan coc de chuyen 'Paid' va Status -> Confirmed
                 .status("Pending")
                 .createdAt(LocalDateTime.now())
                 .build();
+
+        GracePeriod gracePeriod = computeGracePeriod(
+                request.getExpectedEntryTime(), request.getExpectedExitTime(), feeConfig.getDepositPercent());
+        reservation.setCheckinDeadline(gracePeriod.checkinDeadline());
+        reservation.setGraceMinutes(gracePeriod.graceMinutes());
+
         return reservationRepository.save(reservation);
+    }
+
+    private static final int GRACE_FLOOR_MINUTES = 15;
+    private static final long GRACE_CAP_SHORT_MINUTES = 2 * 60;
+    private static final long GRACE_CAP_MULTIDAY_MINUTES = 12 * 60;
+    private static final long GRACE_CAP_WEEKPLUS_MINUTES = 24 * 60;
+    private static final long ONE_DAY_MINUTES = 24 * 60;
+    private static final long SEVEN_DAYS_MINUTES = 7 * 24 * 60;
+
+    private record GracePeriod(LocalDateTime checkinDeadline, int graceMinutes) {
+    }
+
+    /**
+     * Han check-in = expectedEntryTime + grace, grace ti le voi do dai booking va
+     * depositPercentAtBooking (coc cao hon -> khach "cam ket" nhieu hon -> grace dai hon), nhung
+     * bi chan tren boi mot cap theo do dai booking (booking cang dai thi cho phep tre lau hon) va
+     * chan duoi 15 phut (du booking rat ngan/coc rat thap thi khach van co it nhat 15 phut de den).
+     */
+    static GracePeriod computeGracePeriod(
+            LocalDateTime entryTime, LocalDateTime exitTime, BigDecimal depositPercent) {
+        long durationMinutes = ChronoUnit.MINUTES.between(entryTime, exitTime);
+        BigDecimal graceRawMinutes = BigDecimal.valueOf(durationMinutes).multiply(toFraction(depositPercent));
+
+        long capMinutes = durationMinutes < ONE_DAY_MINUTES ? GRACE_CAP_SHORT_MINUTES
+                : durationMinutes <= SEVEN_DAYS_MINUTES ? GRACE_CAP_MULTIDAY_MINUTES
+                : GRACE_CAP_WEEKPLUS_MINUTES;
+
+        long graceMinutes = Math.max(GRACE_FLOOR_MINUTES,
+                Math.min(graceRawMinutes.setScale(0, RoundingMode.HALF_UP).longValue(), capMinutes));
+
+        return new GracePeriod(entryTime.plusMinutes(graceMinutes), (int) graceMinutes);
     }
 
     /**
@@ -106,7 +171,7 @@ public class ReservationService {
             throw new BusinessRuleException("Giờ ra phải sau giờ vào");
         }
         BigDecimal fee = pricingService.calculateFee(vehicleTypeId, entryTime, exitTime);
-        return new ReservationQuoteDTO(fee, depositFor(fee));
+        return new ReservationQuoteDTO(fee, depositFor(fee, feeConfigService.getFeeConfig()));
     }
 
     private static final BigDecimal DEPOSIT_ROUNDING_UNIT = BigDecimal.valueOf(1000);
@@ -118,13 +183,15 @@ public class ReservationService {
      * Lam tron XUONG boi so cua 1.000d (vd 22.500 -> 22.000) — coc le khong chia het 1.000 gay
      * kho khan khi thanh toan/doi soat tien mat va khong khop menh gia thuc te.
      */
-    private BigDecimal depositFor(BigDecimal estimatedFee) {
-        BigDecimal pct = feeConfigService.getFeeConfig().getDepositPercent();
-        BigDecimal fraction = pct.compareTo(BigDecimal.ONE) > 0
-                ? pct.divide(BigDecimal.valueOf(100))
-                : pct;
-        BigDecimal deposit = estimatedFee.multiply(fraction);
+    private BigDecimal depositFor(BigDecimal estimatedFee, FeeConfigResponse feeConfig) {
+        BigDecimal deposit = estimatedFee.multiply(toFraction(feeConfig.getDepositPercent()));
         return deposit.divide(DEPOSIT_ROUNDING_UNIT, 0, RoundingMode.FLOOR).multiply(DEPOSIT_ROUNDING_UNIT);
+    }
+
+    /** Chap nhan depositPercent o CA HAI dang: phan tram (vd 50) HOAC phan so (0.5) — gia tri > 1
+     * duoc coi la phan tram va chia 100. Dung chung boi depositFor() va computeGracePeriod(). */
+    private static BigDecimal toFraction(BigDecimal pct) {
+        return pct.compareTo(BigDecimal.ONE) > 0 ? pct.divide(BigDecimal.valueOf(100)) : pct;
     }
 
     /**
@@ -218,17 +285,25 @@ public class ReservationService {
      * - Driver huy chu dong (refund=true, status=Cancelled) qua {@link #cancel(Long, String)}.
      * - Scheduler no-show (refund=false/forfeit, status=Expired).
      * - Manager cascade khi o bao tri lam mat suc chua (refund=true, status=Cancelled).
-     * Khong co cong thanh toan hoan tien tu dong that (PayOS hoan coc la thu cong theo ghi chu
-     * nghiep vu) nen o day chi cap nhat depositStatus de phan anh ket qua tai chinh; doi tac
-     * thanh toan xu ly hoan tien thuc te ngoai luong nay.
+     * Khi refund=true thuc su goi PayOS (Phase 6.1): coc da "Paid" -> attemptRefundPaidDeposit
+     * (that bai/chua cau hinh Payout se roi vao hang ManualRequired thay vi nem loi — huy booking
+     * van phai thanh cong du hoan tien co thuc hien duoc ngay hay khong); coc con "Pending" (chua
+     * kip thanh toan) -> cancelPaymentLink de vo hieu hoa link/QR cu. refund=false (no-show/forfeit)
+     * khong goi PayOS.
      */
     @Transactional
     public Reservation cancelWithRefund(Reservation reservation, String newStatus, boolean refund) {
         reservation.setStatus(newStatus);
-        // Neu da dong coc thi phan anh ket qua tai chinh: refund=true -> Refunded, forfeit -> Forfeited.
-        // (Hoan/mat coc thuc te do PayOS xu ly thu cong, o day chi cap nhat trang thai.)
-        if ("Paid".equals(reservation.getDepositStatus())) {
-            reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
+        String depositStatus = reservation.getDepositStatus();
+        if (refund && "Paid".equals(depositStatus)) {
+            payosService.attemptRefundPaidDeposit(reservation, "Booking " + newStatus + " - hoan coc da thanh toan");
+            reservation.setDepositStatus("Refunded");
+        } else if (refund && "Pending".equals(depositStatus)) {
+            payosService.findPendingDepositOrderCode(reservation)
+                    .ifPresent(orderCode -> payosService.cancelPaymentLink(
+                            orderCode, "Booking " + newStatus + " - huy truoc khi thanh toan coc"));
+        } else if (!refund && "Paid".equals(depositStatus)) {
+            reservation.setDepositStatus("Forfeited");
         }
         return reservationRepository.save(reservation);
     }
@@ -274,5 +349,77 @@ public class ReservationService {
         payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));
 
         return reservationRepository.findById(id).orElseThrow();
+    }
+
+    /** Gia tri nguyen thuy trich tu pha doc de dung sau khi transaction da dong. */
+    private record ExtensionQuote(UUID reservationId, String licensePlate, BigDecimal fee) {
+    }
+
+    /**
+     * Gia han booking + tinh phi cho phan gia han THEO GIA HIEN HANH (khong dung snapshot luc dat
+     * cho — day la mot giao dich moi, xem phase-5 doc). Chia 3 pha giong het
+     * SessionService.createFeeLink de KHONG giu ket noi DB trong luc goi PayOS (HTTP co the mat
+     * ~15s): (1) kiem tra quyen/trang thai + checkQuota + tinh phi trong 1 tx ngan, (2) goi PayOS
+     * khi khong con giu tx, (3) cap nhat expectedExitTime + luu Payment "Pending" trong 1 tx ngan.
+     * originalExpectedExitTime KHONG bi dong vao day (van tro nguyen tu luc dat cho dau tien) de
+     * base_fee o checkout (Phase 4) van gioi han dung khung gio da khoa gia ban dau.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ExtendReservationResponse extendReservation(UUID id, String username, LocalDateTime newExitTime) {
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+
+        ExtensionQuote quote = tx.execute(status -> {
+            Reservation reservation = findById(id);
+            if (!reservation.getUser().getUsername().equals(username)) {
+                throw new BusinessRuleException("Bạn không có quyền gia hạn booking này");
+            }
+            if (!List.of("Confirmed", "CheckedIn").contains(reservation.getStatus())) {
+                throw new BusinessRuleException("Chỉ có thể gia hạn khi booking đã xác nhận hoặc đang đỗ");
+            }
+            if (!newExitTime.isAfter(reservation.getExpectedExitTime())) {
+                throw new BusinessRuleException("Giờ gia hạn phải dài hơn giờ dự kiến ra cũ");
+            }
+
+            ReservationRequest mockRequest = new ReservationRequest();
+            mockRequest.setExpectedEntryTime(reservation.getExpectedExitTime());
+            mockRequest.setExpectedExitTime(newExitTime);
+            mockRequest.setVehicleTypeId(reservation.getVehicleType().getVehicleTypeId());
+            mockRequest.setLicensePlate(reservation.getLicensePlate());
+            checkQuota(mockRequest, reservation.getVehicleType());
+
+            // Gia CURRENT policy (khong phai snapshot) — gia han la giao dich moi, tinh theo bang
+            // gia Manager cau hinh HIEN TAI cho doan thoi gian them [expectedExitTime cu, newExitTime).
+            BigDecimal extensionFee = pricingService.calculateFee(
+                    reservation.getVehicleType().getVehicleTypeId(), reservation.getExpectedExitTime(), newExitTime);
+
+            return new ExtensionQuote(reservation.getReservationId(), reservation.getLicensePlate(), extensionFee);
+        });
+
+        // Pha 2 (KHONG giu tx): goi PayOS — khong ghim ket noi DB trong suot HTTP call.
+        PayosLinkResponse link = payosService.createLinkForAmount(
+                quote.reservationId(), quote.fee().longValue(), "Gia han " + quote.licensePlate());
+
+        Reservation updated = tx.execute(status -> {
+            Reservation reservation = findById(quote.reservationId());
+            reservation.setExpectedExitTime(newExitTime);
+            Reservation saved = reservationRepository.save(reservation);
+
+            paymentRepository.save(Payment.builder()
+                    .reservation(saved)
+                    .amount(BigDecimal.valueOf(link.getAmount()))
+                    .paymentMethod("PayOS")
+                    .paymentTime(LocalDateTime.now())
+                    .paymentStatus("Pending")
+                    .paymentPurpose("Extension")
+                    .transactionReference(String.valueOf(link.getOrderCode()))
+                    .build());
+
+            return saved;
+        });
+
+        return ExtendReservationResponse.builder()
+                .reservation(ReservationDTO.from(updated))
+                .payment(link)
+                .build();
     }
 }

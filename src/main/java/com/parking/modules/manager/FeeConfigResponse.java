@@ -14,4 +14,6 @@ public class FeeConfigResponse {
     private Integer blacklistThreshold;
     /** So phut cho phep thanh toan coc ke tu luc tao booking; qua han -> tu dong Expired. */
     private Integer depositPaymentWindowMinutes;
+    /** Muc lech (VND) cho phep giua tien mat Staff thu va so he thong tinh truoc khi can Manager duyet. */
+    private BigDecimal cashToleranceVnd;
 }

@@ -30,14 +30,21 @@ public class SessionService {
     private static final List<String> OUTSTANDING_RESERVATION_STATUSES = List.of("Confirmed");
 
     /**
-     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay).
-     * PricingPolicy chua co
-     * field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe qua 24h la
-     * qua han).
+     * Gia han (grace period) truoc khi tinh phu phi qua han (overstay) — CHI cho phien walk-in
+     * (khong co reservation, nen khong co snapshot gia/checkinDeadline nao de doi chieu).
+     * PricingPolicy chua co field rieng cho gia han nen dung hang so co dinh (gia dinh: gui xe
+     * qua 24h la qua han). Phien co reservation dung nguong khac: reservation.expectedExitTime
+     * (khong co grace them) — xem computeReservationFee().
      * Assumption: 24h la muc gia han hop ly cho bai do xe thong thuong (khong phai
      * bai gui theo thang).
      */
-    private static final int OVERSTAY_GRACE_HOURS = 24; // We can still keep this static if the FE didn't want overstayGraceHours, or maybe not. Let's keep it static.
+    private static final int WALKIN_OVERSTAY_GRACE_HOURS = 24;
+
+    // Nguong tinh overstay cho phien co reservation (Phase 4, dung chung cong thuc voi
+    // ReservationService.computeGracePeriod nhung day la muc theo PHUT co dinh, khong ti le):
+    // <=10 phut tre = mien phi (buffer), 10-30 phut = tinh 1 nua khoi gio, >30 phut = ceil(phut/60) gio.
+    private static final long RESERVATION_OVERSTAY_FREE_BUFFER_MINUTES = 10;
+    private static final long RESERVATION_OVERSTAY_HALF_BLOCK_MINUTES = 30;
 
 
     private final ParkingSessionRepository sessionRepository;
@@ -54,6 +61,7 @@ public class SessionService {
     private final PricingService pricingService;
     private final PayosService payosService;
     private final PlatformTransactionManager txManager;
+    private final CheckoutApprovalRequestRepository checkoutApprovalRequestRepository;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) -
@@ -120,6 +128,15 @@ public class SessionService {
             if (headroom <= 0) {
                 throw new BusinessRuleException("Het cho cho loai xe nay (walk-in headroom = " + headroom + ")");
             }
+        }
+
+        // Chan trung check-in: 2 cong cung check-in 1 bien so dong thoi, hoac 1 ket noi bi rot
+        // khien client retry va tao phien mo cua ("orphan") thu hai cho cung bien so. Chay duoi
+        // @Transactional(SERIALIZABLE) nen check-va-tao nay la nguyen tu.
+        if (sessionRepository.findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
+                .isPresent()) {
+            throw new BusinessRuleException(
+                    "Bien so " + request.getLicensePlate() + " da co phien gui xe dang mo", "DUPLICATE_OPEN_SESSION");
         }
 
         ParkingSlot suggestedSlot = slotRepository
@@ -219,7 +236,7 @@ public class SessionService {
     }
 
     @Transactional
-    public CheckOutResponse checkOut(CheckOutRequest request) {
+    public CheckOutResponse checkOut(CheckOutRequest request, String staffUsername) {
         ParkingSession session = sessionRepository
                 .findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so nay"));
@@ -230,29 +247,195 @@ public class SessionService {
         long minutes = Duration.between(session.getEntryTime(), exitTime).toMinutes();
 
         PricingPolicy policy = activePolicy(session.getVehicleType().getVehicleTypeId());
+        Reservation reservation = session.getReservation();
 
         boolean lostTicket = request.isLostTicket();
-        long hours = (long) Math.ceil(minutes / 60.0);
-        boolean overstay = hours > OVERSTAY_GRACE_HOURS;
+        boolean overstay = reservation != null
+                ? exitTime.isAfter(reservation.getExpectedExitTime())
+                : (long) Math.ceil(minutes / 60.0) > WALKIN_OVERSTAY_GRACE_HOURS;
         // Same formula as the live estimate / PayOS QR (computeFee), plus the lost-ticket fee that
         // is only known at the gate — so what the customer was quoted matches what we charge.
-        BigDecimal amount = computeFee(policy, session, exitTime, lostTicket);
-        BigDecimal lostTicketFee = (lostTicket && policy.getLostTicketFee() != null)
-                ? policy.getLostTicketFee()
-                : BigDecimal.ZERO;
+        // For a reservation-backed session this is the FULL trip total (locked base + extension +
+        // overstay), not yet net of deposit/prior online payments — those are subtracted below.
+        BigDecimal totalFee = computeFee(policy, session, exitTime, lostTicket);
+        BigDecimal lostTicketFee = BigDecimal.ZERO;
+        if (lostTicket) {
+            BigDecimal ltFee = reservation != null ? reservation.getLostTicketFeeAtBooking() : policy.getLostTicketFee();
+            if (ltFee != null) lostTicketFee = ltFee;
+        }
 
         boolean plateMismatch = !session.getLicensePlateIn().equalsIgnoreCase(request.getLicensePlate());
 
-        session.setLicensePlateOut(request.getLicensePlate());
-        session.setExitImageUrl(request.getExitImageUrl());
+        // Deposit — subtract what was already collected at booking time (item 4/Phase 4).
+        BigDecimal depositAlreadyPaid = (reservation != null && "Paid".equals(reservation.getDepositStatus())
+                && reservation.getDepositAmount() != null) ? reservation.getDepositAmount() : BigDecimal.ZERO;
+
+        // Settlement — sum ALL Success payments already collected online for this session/
+        // reservation (Fee-purpose QR/VNPay paid before the gate, Extension-purpose paid at
+        // extend-time) instead of findFirst(), so neither is missed nor double-charged at the gate.
+        List<Payment> onlineFeePayments = paymentRepository.findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(
+                session.getSessionId(), "Success", List.of("Fee"));
+        List<Payment> onlineExtensionPayments = reservation != null
+                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
+                        reservation.getReservationId(), "Success", List.of("Extension"))
+                : List.of();
+        BigDecimal alreadySettledOnline = BigDecimal.ZERO;
+        for (Payment p : onlineFeePayments) {
+            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
+            if (p.getReservation() == null && reservation != null) {
+                p.setReservation(reservation);
+                paymentRepository.save(p);
+            }
+        }
+        for (Payment p : onlineExtensionPayments) {
+            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
+        }
+
+        BigDecimal amountDue = totalFee.subtract(depositAlreadyPaid).subtract(alreadySettledOnline).max(BigDecimal.ZERO);
+
+        // Cash wrong-amount guard (Phase 6, item 2): so far nothing has been mutated yet (session
+        // still open, slot/card untouched) — if the cash collected at the gate is outside tolerance
+        // of amountDue, park the whole checkout as a pending CheckoutApprovalRequest instead of
+        // completing it, so a Manager reconciles the discrepancy before the books are closed.
+        if (request.getCollectedAmount() != null) {
+            BigDecimal tolerance = feeConfigService.getFeeConfig().getCashToleranceVnd();
+            if (tolerance == null) tolerance = BigDecimal.ZERO;
+            BigDecimal diff = request.getCollectedAmount().subtract(amountDue).abs();
+            if (diff.compareTo(tolerance) > 0) {
+                if (request.getDiscountReason() == null || request.getDiscountReason().isBlank()) {
+                    throw new BusinessRuleException(
+                            "So tien thu (" + request.getCollectedAmount() + ") lech qua muc cho phep (tolerance="
+                                    + tolerance + ") so voi so phai thu (" + amountDue
+                                    + ") - can nhap discountReason de gui Manager duyet",
+                            "CASH_AMOUNT_MISMATCH");
+                }
+                CheckoutApprovalRequest approval = CheckoutApprovalRequest.builder()
+                        .sessionId(session.getSessionId())
+                        .licensePlate(request.getLicensePlate())
+                        .exitGateId(exitGate.getGateId())
+                        .exitImageUrl(request.getExitImageUrl())
+                        .lostTicket(lostTicket)
+                        .paymentMethod(request.getPaymentMethod())
+                        .requestedAmount(request.getCollectedAmount())
+                        .computedAmount(amountDue)
+                        .reason(request.getDiscountReason())
+                        .requestedBy(staffUsername)
+                        .status("Open")
+                        .exitTime(exitTime)
+                        .parkedMinutes(minutes)
+                        .overstay(overstay)
+                        .totalFee(totalFee)
+                        .lostTicketFee(lostTicketFee)
+                        .plateMismatch(plateMismatch)
+                        .depositAlreadyPaid(depositAlreadyPaid)
+                        .alreadySettledOnline(alreadySettledOnline)
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                approval = checkoutApprovalRequestRepository.save(approval);
+
+                return CheckOutResponse.builder()
+                        .sessionId(session.getSessionId())
+                        .licensePlateIn(session.getLicensePlateIn())
+                        .licensePlateOut(request.getLicensePlate())
+                        .plateMismatch(plateMismatch)
+                        .entryTime(session.getEntryTime())
+                        .exitTime(exitTime)
+                        .parkedMinutes(minutes)
+                        .vehicleTypeName(session.getVehicleType().getTypeName())
+                        .amount(amountDue)
+                        .lostTicketFee(lostTicketFee)
+                        .paymentMethod(request.getPaymentMethod())
+                        .paymentStatus("PendingApproval")
+                        .exitGateName(exitGate.getGateName())
+                        .isOverstay(overstay)
+                        .pendingApproval(true)
+                        .approvalRequestId(approval.getApprovalId())
+                        .build();
+            }
+        }
+
+        return finalizeCheckout(session, exitGate, reservation, request.getLicensePlate(), request.getExitImageUrl(),
+                lostTicket, request.getPaymentMethod(), exitTime, minutes, overstay, totalFee, lostTicketFee,
+                plateMismatch, depositAlreadyPaid, alreadySettledOnline, onlineFeePayments, onlineExtensionPayments,
+                amountDue, request.getCollectedAmount());
+    }
+
+    /**
+     * Manager duyet mot CheckoutApprovalRequest dang Open: hoan tat checkout dung nhu Staff da
+     * yeu cau ban dau (dung lai toan bo ngu canh da luu — KHONG tinh lai phi theo thoi diem duyet),
+     * thu chinh xac so tien Staff da bao cao thu (requestedAmount) thay vi computedAmount.
+     */
+    @Transactional
+    public CheckOutResponse approveCheckoutRequest(Long approvalId, String managerUsername) {
+        CheckoutApprovalRequest approval = checkoutApprovalRequestRepository.findById(approvalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay yeu cau duyet checkout #" + approvalId));
+        if (!"Open".equals(approval.getStatus())) {
+            throw new BusinessRuleException("Yeu cau duyet checkout #" + approvalId + " da duoc xu ly", "ALREADY_DECIDED");
+        }
+        ParkingSession session = sessionRepository.findById(approval.getSessionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien #" + approval.getSessionId()));
+        Gate exitGate = gateRepository.findById(approval.getExitGateId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay cong ra"));
+
+        List<Payment> onlineFeePayments = paymentRepository.findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(
+                session.getSessionId(), "Success", List.of("Fee"));
+        Reservation reservation = session.getReservation();
+        List<Payment> onlineExtensionPayments = reservation != null
+                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
+                        reservation.getReservationId(), "Success", List.of("Extension"))
+                : List.of();
+
+        CheckOutResponse response = finalizeCheckout(session, exitGate, reservation, approval.getLicensePlate(),
+                approval.getExitImageUrl(), approval.isLostTicket(), approval.getPaymentMethod(),
+                approval.getExitTime(), approval.getParkedMinutes(), approval.isOverstay(), approval.getTotalFee(),
+                approval.getLostTicketFee(), approval.isPlateMismatch(), approval.getDepositAlreadyPaid(),
+                approval.getAlreadySettledOnline(), onlineFeePayments, onlineExtensionPayments,
+                approval.getComputedAmount(), approval.getRequestedAmount());
+
+        approval.setStatus("Approved");
+        approval.setDecidedBy(managerUsername);
+        approval.setDecidedAt(LocalDateTime.now());
+        checkoutApprovalRequestRepository.save(approval);
+
+        return response;
+    }
+
+    /** Manager tu choi: yeu cau van "Open" bi dong lai "Rejected", phien gui xe van con mo de Staff xu ly lai. */
+    @Transactional
+    public CheckoutApprovalRequest rejectCheckoutRequest(Long approvalId, String managerUsername) {
+        CheckoutApprovalRequest approval = checkoutApprovalRequestRepository.findById(approvalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay yeu cau duyet checkout #" + approvalId));
+        if (!"Open".equals(approval.getStatus())) {
+            throw new BusinessRuleException("Yeu cau duyet checkout #" + approvalId + " da duoc xu ly", "ALREADY_DECIDED");
+        }
+        approval.setStatus("Rejected");
+        approval.setDecidedBy(managerUsername);
+        approval.setDecidedAt(LocalDateTime.now());
+        return checkoutApprovalRequestRepository.save(approval);
+    }
+
+    /**
+     * Phan hoan tat checkout thuc su (mutate session/slot/card, ghi Payment/AuditLog) — dung chung
+     * boi checkOut() khi trong tolerance/khong co collectedAmount, va boi approveCheckoutRequest()
+     * khi Manager duyet mot yeu cau truoc do bi tam giu. {@code chargeAmount} la so tien thuc su
+     * duoc ghi nhan la da thu (collectedAmount neu co, nguoc lai la computedAmount/amountDue).
+     */
+    private CheckOutResponse finalizeCheckout(ParkingSession session, Gate exitGate, Reservation reservation,
+            String licensePlateOut, String exitImageUrl, boolean lostTicket, String requestedPaymentMethod,
+            LocalDateTime exitTime, long minutes, boolean overstay, BigDecimal totalFee, BigDecimal lostTicketFee,
+            boolean plateMismatch, BigDecimal depositAlreadyPaid, BigDecimal alreadySettledOnline,
+            List<Payment> onlineFeePayments, List<Payment> onlineExtensionPayments, BigDecimal amountDue,
+            BigDecimal collectedAmountOverride) {
+
+        session.setLicensePlateOut(licensePlateOut);
+        session.setExitImageUrl(exitImageUrl);
         session.setExitGate(exitGate);
         session.setExitTime(exitTime);
         session.setStatus("Completed");
         session.setIsOverstay(overstay);
         sessionRepository.save(session);
 
-        if (session.getReservation() != null) {
-            Reservation reservation = session.getReservation();
+        if (reservation != null) {
             reservation.setStatus("Fulfilled");
             reservationRepository.save(reservation);
         }
@@ -277,44 +460,39 @@ public class SessionService {
             parkingCardRepository.save(card);
         }
 
-        // Settlement — if the customer already paid this session online via a PayOS fee QR
-        // (webhook flipped that payment to Success), reconcile against it instead of raising a
-        // second charge. Otherwise record the gate payment (cash by default) as before.
-        Payment onlinePaid = paymentRepository.findBySession_SessionId(session.getSessionId())
-                .stream()
-                .filter(p -> "Success".equals(p.getPaymentStatus()))
-                .findFirst()
-                .orElse(null);
+        BigDecimal chargeAmount = collectedAmountOverride != null ? collectedAmountOverride : amountDue;
 
         String paymentMethod;
         BigDecimal settledAmount;
-        if (onlinePaid != null) {
-            paymentMethod = onlinePaid.getPaymentMethod();
-            settledAmount = onlinePaid.getAmount();
-            if (onlinePaid.getReservation() == null && session.getReservation() != null) {
-                onlinePaid.setReservation(session.getReservation());
-                paymentRepository.save(onlinePaid);
-            }
-        } else {
-            paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
-            settledAmount = amount;
+        if (chargeAmount.compareTo(BigDecimal.ZERO) > 0) {
+            paymentMethod = requestedPaymentMethod == null ? "Cash" : requestedPaymentMethod;
+            settledAmount = chargeAmount;
             paymentRepository.save(Payment.builder()
                     .session(session)
-                    .reservation(session.getReservation())
-                    .amount(amount)
+                    .reservation(reservation)
+                    .amount(chargeAmount)
                     .paymentMethod(paymentMethod)
                     .paymentTime(exitTime)
                     .paymentStatus("Success")
+                    .paymentPurpose("Fee")
                     .build());
+        } else {
+            // Fully covered by deposit + prior online payments — nothing new to collect at the gate.
+            settledAmount = BigDecimal.ZERO;
+            Payment latestOnline = java.util.stream.Stream.concat(onlineFeePayments.stream(), onlineExtensionPayments.stream())
+                    .max(java.util.Comparator.comparing(Payment::getPaymentId))
+                    .orElse(null);
+            paymentMethod = latestOnline != null ? latestOnline.getPaymentMethod() : "Deposit";
         }
 
         AuditLog log = AuditLog.builder()
                 .action("STAFF_CHECK_OUT")
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
-                .detail("Staff checked out vehicle: " + request.getLicensePlate()
-                        + " | " + minutes + " min | " + settledAmount + " VND | " + paymentMethod
-                        + (onlinePaid != null ? " (ONLINE, computed=" + amount + ")" : "")
+                .detail("Staff checked out vehicle: " + licensePlateOut
+                        + " | " + minutes + " min | total=" + totalFee + " deposit=" + depositAlreadyPaid
+                        + " onlinePrePaid=" + alreadySettledOnline + " collectedNow=" + settledAmount
+                        + " VND | " + paymentMethod
                         + (lostTicket ? " | LOST TICKET" : "")
                         + (plateMismatch ? " | PLATE MISMATCH (in=" + session.getLicensePlateIn() + ")" : "")
                         + " | cong ra: " + exitGate.getGateName())
@@ -325,7 +503,7 @@ public class SessionService {
         return CheckOutResponse.builder()
                 .sessionId(session.getSessionId())
                 .licensePlateIn(session.getLicensePlateIn())
-                .licensePlateOut(request.getLicensePlate())
+                .licensePlateOut(licensePlateOut)
                 .plateMismatch(plateMismatch)
                 .entryTime(session.getEntryTime())
                 .exitTime(exitTime)
@@ -339,6 +517,7 @@ public class SessionService {
                 .slotFreed(slotFreed)
                 .cardReturned(cardReturned)
                 .isOverstay(overstay)
+                .pendingApproval(false)
                 .build();
     }
 
@@ -382,15 +561,19 @@ public class SessionService {
         // Pha 3 (tx ngan): luu Payment "Pending" theo orderCode de webhook/polling doi chieu khi
         // khach thanh toan, va de check-out nhan ra (tranh thu phi 2 lan). So tien luu = so tien
         // thuc gui PayOS (sau khi ap san toi thieu), khop voi thuc te.
-        tx.executeWithoutResult(status ->
-                paymentRepository.save(Payment.builder()
-                        .session(sessionRepository.findById(quote.sessionId()).orElseThrow())
-                        .amount(BigDecimal.valueOf(link.getAmount()))
-                        .paymentMethod("PayOS")
-                        .paymentTime(LocalDateTime.now())
-                        .paymentStatus("Pending")
-                        .transactionReference(String.valueOf(link.getOrderCode()))
-                        .build()));
+        tx.executeWithoutResult(status -> {
+            ParkingSession s = sessionRepository.findById(quote.sessionId()).orElseThrow();
+            paymentRepository.save(Payment.builder()
+                    .session(s)
+                    .reservation(s.getReservation())
+                    .amount(BigDecimal.valueOf(link.getAmount()))
+                    .paymentMethod("PayOS")
+                    .paymentTime(LocalDateTime.now())
+                    .paymentStatus("Pending")
+                    .paymentPurpose("Fee")
+                    .transactionReference(String.valueOf(link.getOrderCode()))
+                    .build());
+        });
 
         return link;
     }
@@ -420,6 +603,7 @@ public class SessionService {
                 .hasCard(s.getCard() != null)
                 .parkedMinutes(Duration.between(s.getEntryTime(), now).toMinutes())
                 .estimatedFee(estimateFee(s, now))
+                .isOverstayFlagged(Boolean.TRUE.equals(s.getIsOverstayFlagged()))
                 .build();
     }
 
@@ -444,20 +628,82 @@ public class SessionService {
     /**
      * Canonical parking fee for a session up to {@code exitTime}. Single source of truth shared by
      * the live estimate / PayOS QR (lostTicket=false) and the real check-out (lostTicket as marked),
-     * so a quoted amount cannot diverge from the charged amount. Composition:
-     *   base + extra-hours + night surcharge   (PricingService.calculateFee — same as Driver estimate)
-     *   + overstay surcharge                    (global rate, for hours beyond OVERSTAY_GRACE_HOURS)
-     *   + lost-ticket fee                       (check-out only)
+     * so a quoted amount cannot diverge from the charged amount. Branches on whether the session is
+     * reservation-backed: reservations must bill off their price-lock SNAPSHOT (Phase 2) capped at
+     * the ORIGINAL reserved window (Phase 4 — fixes the double-counting/no-proration bug, see
+     * phase-0-context.md), walk-ins keep billing off the live policy as before.
      */
     private BigDecimal computeFee(PricingPolicy policy, ParkingSession session, LocalDateTime exitTime, boolean lostTicket) {
-        BigDecimal fee = pricingService.calculateFee(policy, session.getEntryTime(), exitTime);
-        long hours = (long) Math.ceil(Duration.between(session.getEntryTime(), exitTime).toMinutes() / 60.0);
-        if (hours > OVERSTAY_GRACE_HOURS) {
-            BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
-            fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours - OVERSTAY_GRACE_HOURS)));
+        Reservation reservation = session.getReservation();
+        if (reservation != null) {
+            return computeReservationFee(reservation, session, exitTime, lostTicket);
         }
+        return computeWalkinFee(policy, session, exitTime, lostTicket);
+    }
+
+    /** Walk-in (no reservation): live policy, flat OVERSTAY_GRACE_HOURS grace, live overstay rate. */
+    private BigDecimal computeWalkinFee(PricingPolicy policy, ParkingSession session, LocalDateTime exitTime, boolean lostTicket) {
+        BigDecimal fee = pricingService.calculateFee(policy, session.getEntryTime(), exitTime);
+
+        long hours = (long) Math.ceil(Duration.between(session.getEntryTime(), exitTime).toMinutes() / 60.0);
+        if (hours > WALKIN_OVERSTAY_GRACE_HOURS) {
+            BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
+            fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours - WALKIN_OVERSTAY_GRACE_HOURS)));
+        }
+
         if (lostTicket && policy.getLostTicketFee() != null) {
             fee = fee.add(policy.getLostTicketFee());
+        }
+        return fee;
+    }
+
+    /**
+     * Reservation-backed: base_fee is computed off the price-lock SNAPSHOT (priceAtBookingTime/
+     * baseHoursAtBooking/extraHourPriceAtBooking/nightSurchargeAtBooking), capped at
+     * originalExpectedExitTime — NEVER at the actual (possibly shorter/longer) exitTime. This is
+     * what makes early checkout unprorated (item 4) and fixes the old double-counting bug (the
+     * live-code base_fee used to run to the actual exitTime AND get a second overstay charge on
+     * top). Overstay is a genuinely separate addition, measured past the CURRENT expectedExitTime
+     * (so an extension's new deadline is honored), at overstayRatePerHourAtBooking.
+     */
+    private BigDecimal computeReservationFee(Reservation reservation, ParkingSession session, LocalDateTime exitTime, boolean lostTicket) {
+        PricingPolicy snapshotPolicy = PricingPolicy.builder()
+                .basePrice(reservation.getPriceAtBookingTime())
+                .baseHours(reservation.getBaseHoursAtBooking())
+                .extraHourPrice(reservation.getExtraHourPriceAtBooking())
+                .nightSurcharge(reservation.getNightSurchargeAtBooking())
+                .lostTicketFee(reservation.getLostTicketFeeAtBooking())
+                .build();
+
+        LocalDateTime bookedWindowEnd = reservation.getOriginalExpectedExitTime() != null
+                ? reservation.getOriginalExpectedExitTime()
+                : reservation.getExpectedExitTime();
+        BigDecimal fee = pricingService.calculateFee(snapshotPolicy, session.getEntryTime(), bookedWindowEnd);
+
+        // Extension charge (Phase 5): already priced at the current rate when requested — added
+        // as-is, not re-derived here. Sum in case of multiple sequential extensions.
+        BigDecimal extensionCharge = paymentRepository
+                .findByReservation_ReservationIdAndPaymentPurpose(reservation.getReservationId(), "Extension")
+                .stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        fee = fee.add(extensionCharge);
+
+        LocalDateTime deadline = reservation.getExpectedExitTime(); // current — honors extensions
+        if (deadline != null && exitTime.isAfter(deadline)) {
+            long overstayMinutes = Duration.between(deadline, exitTime).toMinutes();
+            BigDecimal overstayRate = reservation.getOverstayRatePerHourAtBooking() != null
+                    ? reservation.getOverstayRatePerHourAtBooking()
+                    : feeConfigService.getFeeConfig().getOverstayRatePerHour();
+            if (overstayMinutes > RESERVATION_OVERSTAY_HALF_BLOCK_MINUTES) {
+                long hours = (long) Math.ceil(overstayMinutes / 60.0);
+                fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours)));
+            } else if (overstayMinutes > RESERVATION_OVERSTAY_FREE_BUFFER_MINUTES) {
+                fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(0.5)));
+            }
+            // <= 10 minutes: free buffer, no addition.
+        }
+
+        if (lostTicket && reservation.getLostTicketFeeAtBooking() != null) {
+            fee = fee.add(reservation.getLostTicketFeeAtBooking());
         }
         return fee;
     }
