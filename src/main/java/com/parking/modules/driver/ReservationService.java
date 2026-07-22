@@ -6,6 +6,7 @@ import com.parking.entity.*;
 import com.parking.repository.*;
 import com.parking.common.service.PricingService;
 import com.parking.modules.manager.FeeConfigService;
+import com.parking.modules.manager.FeeConfigResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -91,7 +92,8 @@ public class ReservationService {
         // tinh ben Driver va phi checkout de ca ba luon khop nhau. Xem depositFor() ve don vi %.
         BigDecimal estimatedFee = pricingService.calculateFee(
                 policy, request.getExpectedEntryTime(), request.getExpectedExitTime());
-        BigDecimal deposit = depositFor(estimatedFee);
+        FeeConfigResponse feeConfig = feeConfigService.getFeeConfig();
+        BigDecimal deposit = depositFor(estimatedFee, feeConfig);
 
         Reservation reservation = Reservation.builder()
                 .user(user)
@@ -101,6 +103,16 @@ public class ReservationService {
                 .expectedExitTime(request.getExpectedExitTime())
                 .depositAmount(deposit)
                 .priceAtBookingTime(policy.getBasePrice())
+                // Snapshot toan bo cac thanh phan gia tai thoi diem dat cho (Phase 2) - xem ghi chu
+                // tai field tuong ung trong Reservation de biet ly do.
+                .baseHoursAtBooking(policy.getBaseHours())
+                .extraHourPriceAtBooking(policy.getExtraHourPrice())
+                .nightSurchargeAtBooking(policy.getNightSurcharge())
+                .lostTicketFeeAtBooking(policy.getLostTicketFee())
+                .depositPercentAtBooking(feeConfig.getDepositPercent())
+                .overstayRatePerHourAtBooking(feeConfig.getOverstayRatePerHour())
+                .estimatedFeeAtBooking(estimatedFee)
+                .originalExpectedExitTime(request.getExpectedExitTime())
                 .depositStatus("Pending") // FE chuyen sang thanh toan coc de chuyen 'Paid' va Status -> Confirmed
                 .status("Pending")
                 .createdAt(LocalDateTime.now())
@@ -118,7 +130,7 @@ public class ReservationService {
             throw new BusinessRuleException("Giờ ra phải sau giờ vào");
         }
         BigDecimal fee = pricingService.calculateFee(vehicleTypeId, entryTime, exitTime);
-        return new ReservationQuoteDTO(fee, depositFor(fee));
+        return new ReservationQuoteDTO(fee, depositFor(fee, feeConfigService.getFeeConfig()));
     }
 
     private static final BigDecimal DEPOSIT_ROUNDING_UNIT = BigDecimal.valueOf(1000);
@@ -130,8 +142,8 @@ public class ReservationService {
      * Lam tron XUONG boi so cua 1.000d (vd 22.500 -> 22.000) — coc le khong chia het 1.000 gay
      * kho khan khi thanh toan/doi soat tien mat va khong khop menh gia thuc te.
      */
-    private BigDecimal depositFor(BigDecimal estimatedFee) {
-        BigDecimal pct = feeConfigService.getFeeConfig().getDepositPercent();
+    private BigDecimal depositFor(BigDecimal estimatedFee, FeeConfigResponse feeConfig) {
+        BigDecimal pct = feeConfig.getDepositPercent();
         BigDecimal fraction = pct.compareTo(BigDecimal.ONE) > 0
                 ? pct.divide(BigDecimal.valueOf(100))
                 : pct;
