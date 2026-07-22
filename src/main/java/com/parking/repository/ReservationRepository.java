@@ -28,6 +28,9 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     /** Booking chua check-in nhung da qua gio du kien ra -> no-show. */
     List<Reservation> findByStatusInAndExpectedExitTimeBefore(List<String> statuses, LocalDateTime threshold);
 
+    /** Thay the ham tren o Phase 3: no-show tinh theo checkinDeadline (gia han theo bac) thay vi expectedExitTime thuan. */
+    List<Reservation> findByStatusInAndCheckinDeadlineBefore(List<String> statuses, LocalDateTime threshold);
+
     /** Booking con "Pending" (chua thanh toan coc) qua han cua so thanh toan tinh tu luc tao. */
     List<Reservation> findByStatusAndCreatedAtBefore(String status, LocalDateTime threshold);
 
