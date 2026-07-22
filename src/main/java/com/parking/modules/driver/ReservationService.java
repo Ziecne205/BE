@@ -55,6 +55,7 @@ public class ReservationService {
                 .expectedEntryTime(request.getExpectedEntryTime())
                 .expectedExitTime(request.getExpectedExitTime())
                 .depositAmount(deposit)
+                .priceAtBookingTime(policy.getBasePrice())
                 .depositStatus("Pending") // FE chuyen sang thanh toan coc de chuyen 'Paid' va Status -> Confirmed
                 .status("Pending")
                 .createdAt(LocalDateTime.now())

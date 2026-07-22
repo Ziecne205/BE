@@ -43,6 +43,9 @@ public class Reservation {
     @Column(name = "DepositAmount", nullable = false)
     private BigDecimal depositAmount;
 
+    @Column(name = "PriceAtBookingTime")
+    private BigDecimal priceAtBookingTime;
+
     @Column(name = "DepositStatus")
     private String depositStatus; // Pending, Paid, Forfeited, Refunded
 
