@@ -117,7 +117,44 @@ public class ReservationService {
                 .status("Pending")
                 .createdAt(LocalDateTime.now())
                 .build();
+
+        GracePeriod gracePeriod = computeGracePeriod(
+                request.getExpectedEntryTime(), request.getExpectedExitTime(), feeConfig.getDepositPercent());
+        reservation.setCheckinDeadline(gracePeriod.checkinDeadline());
+        reservation.setGraceMinutes(gracePeriod.graceMinutes());
+
         return reservationRepository.save(reservation);
+    }
+
+    private static final int GRACE_FLOOR_MINUTES = 15;
+    private static final long GRACE_CAP_SHORT_MINUTES = 2 * 60;
+    private static final long GRACE_CAP_MULTIDAY_MINUTES = 12 * 60;
+    private static final long GRACE_CAP_WEEKPLUS_MINUTES = 24 * 60;
+    private static final long ONE_DAY_MINUTES = 24 * 60;
+    private static final long SEVEN_DAYS_MINUTES = 7 * 24 * 60;
+
+    private record GracePeriod(LocalDateTime checkinDeadline, int graceMinutes) {
+    }
+
+    /**
+     * Han check-in = expectedEntryTime + grace, grace ti le voi do dai booking va
+     * depositPercentAtBooking (coc cao hon -> khach "cam ket" nhieu hon -> grace dai hon), nhung
+     * bi chan tren boi mot cap theo do dai booking (booking cang dai thi cho phep tre lau hon) va
+     * chan duoi 15 phut (du booking rat ngan/coc rat thap thi khach van co it nhat 15 phut de den).
+     */
+    static GracePeriod computeGracePeriod(
+            LocalDateTime entryTime, LocalDateTime exitTime, BigDecimal depositPercent) {
+        long durationMinutes = ChronoUnit.MINUTES.between(entryTime, exitTime);
+        BigDecimal graceRawMinutes = BigDecimal.valueOf(durationMinutes).multiply(toFraction(depositPercent));
+
+        long capMinutes = durationMinutes < ONE_DAY_MINUTES ? GRACE_CAP_SHORT_MINUTES
+                : durationMinutes <= SEVEN_DAYS_MINUTES ? GRACE_CAP_MULTIDAY_MINUTES
+                : GRACE_CAP_WEEKPLUS_MINUTES;
+
+        long graceMinutes = Math.max(GRACE_FLOOR_MINUTES,
+                Math.min(graceRawMinutes.setScale(0, RoundingMode.HALF_UP).longValue(), capMinutes));
+
+        return new GracePeriod(entryTime.plusMinutes(graceMinutes), (int) graceMinutes);
     }
 
     /**
@@ -143,12 +180,14 @@ public class ReservationService {
      * kho khan khi thanh toan/doi soat tien mat va khong khop menh gia thuc te.
      */
     private BigDecimal depositFor(BigDecimal estimatedFee, FeeConfigResponse feeConfig) {
-        BigDecimal pct = feeConfig.getDepositPercent();
-        BigDecimal fraction = pct.compareTo(BigDecimal.ONE) > 0
-                ? pct.divide(BigDecimal.valueOf(100))
-                : pct;
-        BigDecimal deposit = estimatedFee.multiply(fraction);
+        BigDecimal deposit = estimatedFee.multiply(toFraction(feeConfig.getDepositPercent()));
         return deposit.divide(DEPOSIT_ROUNDING_UNIT, 0, RoundingMode.FLOOR).multiply(DEPOSIT_ROUNDING_UNIT);
+    }
+
+    /** Chap nhan depositPercent o CA HAI dang: phan tram (vd 50) HOAC phan so (0.5) — gia tri > 1
+     * duoc coi la phan tram va chia 100. Dung chung boi depositFor() va computeGracePeriod(). */
+    private static BigDecimal toFraction(BigDecimal pct) {
+        return pct.compareTo(BigDecimal.ONE) > 0 ? pct.divide(BigDecimal.valueOf(100)) : pct;
     }
 
     /**

@@ -35,6 +35,11 @@ public interface ParkingSessionRepository extends MongoRepository<ParkingSession
     /** Phien "Admitted" qua lau khong co tien trien -> nghi van bo xe/loiterer. */
     List<ParkingSession> findByStatusAndEntryTimeBefore(String status, LocalDateTime threshold);
 
+    /** Phien dang mo, chua bi danh dau overstay — ung vien cho flagOverstaySessions() (Phase 4).
+     * Loc them theo reservation.expectedExitTime trong Java (DBRef khong the query xuyen field). */
+    @Query("{ 'status': { $in: ?0 }, 'isOverstayFlagged': { $ne: true } }")
+    List<ParkingSession> findByStatusInAndIsOverstayFlaggedNot(List<String> statuses);
+
     /** Dung de chan xoa mot Gate dang/da duoc tham chieu boi lich su phien. */
     @ExistsQuery("{ $or: [ { 'entryGate.$id': ?0 }, { 'exitGate.$id': ?1 } ] }")
     boolean existsByEntryGate_GateIdOrExitGate_GateId(Integer entryGateId, Integer exitGateId);

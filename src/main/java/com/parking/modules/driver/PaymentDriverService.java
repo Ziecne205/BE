@@ -99,10 +99,12 @@ public class PaymentDriverService {
 
         Payment payment = Payment.builder()
                 .session(session)
+                .reservation(session.getReservation())
                 .amount(fee)
                 .paymentMethod("VNPay_Mock")
                 .paymentTime(LocalDateTime.now())
                 .paymentStatus("Success".equalsIgnoreCase(status) ? "Success" : "Failed")
+                .paymentPurpose("Fee")
                 .transactionReference(txnRef)
                 .build();
 
@@ -157,15 +159,19 @@ public class PaymentDriverService {
                 quote.sessionId(), quote.fee().longValue(), "Phi gui xe " + quote.plate());
 
         // Pha 3 (tx ngan): luu Payment "Pending" theo orderCode de webhook/check-out doi chieu.
-        tx.executeWithoutResult(status ->
-                paymentRepository.save(Payment.builder()
-                        .session(sessionRepository.findById(quote.sessionId()).orElseThrow())
-                        .amount(BigDecimal.valueOf(link.getAmount()))
-                        .paymentMethod("PayOS")
-                        .paymentTime(LocalDateTime.now())
-                        .paymentStatus("Pending")
-                        .transactionReference(String.valueOf(link.getOrderCode()))
-                        .build()));
+        tx.executeWithoutResult(status -> {
+            ParkingSession s = sessionRepository.findById(quote.sessionId()).orElseThrow();
+            paymentRepository.save(Payment.builder()
+                    .session(s)
+                    .reservation(s.getReservation())
+                    .amount(BigDecimal.valueOf(link.getAmount()))
+                    .paymentMethod("PayOS")
+                    .paymentTime(LocalDateTime.now())
+                    .paymentStatus("Pending")
+                    .paymentPurpose("Fee")
+                    .transactionReference(String.valueOf(link.getOrderCode()))
+                    .build());
+        });
 
         return link;
     }

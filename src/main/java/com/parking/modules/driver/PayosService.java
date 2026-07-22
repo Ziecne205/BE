@@ -109,6 +109,7 @@ public class PayosService {
                 .paymentMethod("PayOS")
                 .paymentTime(LocalDateTime.now())
                 .paymentStatus("Pending")
+                .paymentPurpose("Deposit")
                 .transactionReference(String.valueOf(orderCode))
                 .build());
 

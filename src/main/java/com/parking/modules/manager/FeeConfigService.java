@@ -18,6 +18,9 @@ public class FeeConfigService {
                 .hourlyRate(getBigDecimalValue("HOURLY_RATE", BigDecimal.ZERO))
                 .depositPercent(getBigDecimalValue("DEPOSIT_PERCENT", BigDecimal.valueOf(0.50)))
                 .overstayRatePerHour(getBigDecimalValue("OVERSTAY_RATE_PER_HOUR", BigDecimal.valueOf(50000))) // Default fallback
+                // Gia tri gia han co dinh (legacy); tu Phase 3, no-show scheduler dung Reservation.checkinDeadline
+                // (grace ti le theo do dai booking + depositPercentAtBooking, xem ReservationService.computeGracePeriod)
+                // thay vi key nay. Giu lai key/getter/setter de khong pha FE dang render form nay.
                 .noShowGraceMinutes(getIntegerValue("NO_SHOW_GRACE_MINUTES", 15))
                 .blacklistThreshold(getIntegerValue("BLACKLIST_THRESHOLD", 3))
                 .depositPaymentWindowMinutes(getIntegerValue("DEPOSIT_PAYMENT_WINDOW_MINUTES", 15))
