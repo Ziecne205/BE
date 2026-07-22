@@ -40,4 +40,12 @@ public class ReservationController {
     public ApiResponse<Reservation> cancel(@PathVariable Long id, Authentication auth) {
         return ApiResponse.ok("Da huy booking", reservationService.cancel(id, auth.getName()));
     }
+
+    @PostMapping("/{id}/extend")
+    public ApiResponse<Reservation> extendReservation(@PathVariable Long id, 
+                                                      @RequestParam String newExitTime, 
+                                                      Authentication auth) {
+        return ApiResponse.ok("Gia han thanh cong", 
+            reservationService.extendReservation(id, auth.getName(), java.time.LocalDateTime.parse(newExitTime)));
+    }
 }
