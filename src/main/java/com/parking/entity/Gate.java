@@ -1,10 +1,11 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "Gates")
+@Document(collection = "Gates")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,17 +14,12 @@ import lombok.*;
 public class Gate {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "GateID")
     private Integer gateId;
 
-    @Column(name = "GateName", nullable = false)
     private String gateName;
 
-    @Column(name = "GateType", nullable = false)
     private String gateType; // Entry, Exit
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "FloorID", nullable = false)
+    @DBRef
     private Floor floor;
 }

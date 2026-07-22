@@ -1,0 +1,46 @@
+# Render Blueprint — deploy backend Spring Boot bang Docker.
+# Vao Render Dashboard -> New -> Blueprint -> chon repo nay.
+# Cac bien danh dau sync:false phai tu dien gia tri o tab Environment cua service.
+services:
+  - type: web
+    name: parking-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /swagger-ui.html
+    envVars:
+      # --- MongoDB Atlas ---
+      - key: MONGODB_URI
+        sync: false   # mongodb+srv://user:pass@cluster0.xxx.mongodb.net/ParkingDB?retryWrites=true&w=majority
+
+      # --- Bao mat JWT (bat buoc doi trong production) ---
+      - key: APP_JWT_SECRET
+        generateValue: true
+      - key: APP_JWT_EXPIRATION_MS
+        value: "28800000"
+
+      # --- FE da deploy tren Vercel ---
+      - key: APP_FRONTEND_BASE_URL
+        value: https://fe-kappa-two.vercel.app
+      - key: APP_CORS_ALLOWED_ORIGINS
+        value: http://localhost:3000,http://localhost:3001,http://localhost:5173,https://parking-driver.vercel.app,https://fe-kappa-two.vercel.app
+
+      # --- Email OTP qua SendGrid API (Render chan SMTP nen dung HTTPS API) ---
+      - key: SENDGRID_API_KEY
+        sync: false   # SG.... lay o SendGrid: Settings -> API Keys -> Create API Key
+      - key: MAIL_SENDER
+        sync: false   # email nguoi gui DA XAC MINH (Single Sender) tren SendGrid
+      - key: MAIL_SENDER_NAME
+        value: Parking System
+
+      # --- PayOS (cong thanh toan tai xe) ---
+      - key: PAYOS_CLIENT_ID
+        sync: false
+      - key: PAYOS_API_KEY
+        sync: false
+      - key: PAYOS_CHECKSUM_KEY
+        sync: false
+      - key: PAYOS_RETURN_URL
+        value: https://parking-driver.vercel.app/driver/payment/return
+      - key: PAYOS_CANCEL_URL
+        value: https://parking-driver.vercel.app/driver/payment/return?cancel=true

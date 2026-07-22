@@ -1,10 +1,10 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "SystemConfigs")
+@Document(collection = "SystemConfigs")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,12 +13,9 @@ import lombok.*;
 public class SystemConfig {
 
     @Id
-    @Column(name = "ConfigKey")
     private String configKey;
 
-    @Column(name = "ConfigValue", nullable = false)
     private String configValue;
 
-    @Column(name = "Description")
     private String description;
 }

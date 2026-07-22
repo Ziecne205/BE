@@ -1,12 +1,14 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
+
 import java.time.LocalDateTime;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 
-@Entity
-@Table(name = "IncidentReports")
+@Document(collection = "IncidentReports")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -15,48 +17,35 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 public class IncidentReport {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "IncidentID")
     private Long incidentId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "SessionID")
+    @DBRef
     @JsonIgnore
     private ParkingSession session;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "ReportedByUserID", nullable = false)
+    @DBRef
     @JsonIgnore
     private User reportedBy;
 
-    @Column(name = "IssueType", nullable = false)
     private String issueType;
 
-    @Column(name = "Description", nullable = false)
     private String description;
 
-    @Column(name = "ProofImageURL")
     private String proofImageUrl;
 
-    @Column(name = "Status")
     private String status; // Open, InProgress, Resolved
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "HandledByStaffID")
+    @DBRef
     @JsonIgnore
     private User handledByStaff;
 
-    @Column(name = "ResolvedAt")
     private LocalDateTime resolvedAt;
 
-    @Column(name = "ResolutionNotes")
     private String resolutionNotes;
 
-    @Column(name = "CreatedAt")
     private LocalDateTime createdAt;
 
-    // Các Getter này giúp Jackson tự động lấy ID ra JSON mà KHÔNG cần khởi tạo
-    // proxy của Hibernate
+    // Các Getter này phơi ID phẳng ra JSON (ref bị @JsonIgnore).
     public Long getSessionId() {
         return session != null ? session.getSessionId() : null;
     }

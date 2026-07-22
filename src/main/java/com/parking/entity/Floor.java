@@ -1,13 +1,12 @@
 package com.parking.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.DBRef;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "Floors")
-// Floor xuat hien long nhau trong ParkingSlot.floor; sau merge co the la Hibernate proxy.
-@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
+@Document(collection = "Floors")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -16,17 +15,13 @@ import lombok.*;
 public class Floor {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "FloorID")
     private Integer floorId;
 
-    @Column(name = "FloorName", nullable = false, unique = true)
+    @Indexed(unique = true)
     private String floorName;
 
-    @ManyToOne(fetch = FetchType.EAGER)
-    @JoinColumn(name = "DedicatedVehicleTypeID")
+    @DBRef
     private VehicleType dedicatedVehicleType;
 
-    @Column(name = "TotalCapacity", nullable = false)
     private Integer totalCapacity;
 }

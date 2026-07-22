@@ -1,10 +1,11 @@
 package com.parking.entity;
 
-import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.Indexed;
+import org.springframework.data.mongodb.core.mapping.Document;
 
-@Entity
-@Table(name = "ParkingCards")
+@Document(collection = "ParkingCards")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -13,13 +14,10 @@ import lombok.*;
 public class ParkingCard {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "CardID")
     private Long cardId;
 
-    @Column(name = "CardCode", nullable = false, unique = true)
+    @Indexed(unique = true)
     private String cardCode;
 
-    @Column(name = "Status")
     private String status; // Active, Lost, InUse
 }

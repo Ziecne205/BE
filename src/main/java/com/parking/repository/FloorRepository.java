@@ -1,11 +1,14 @@
 package com.parking.repository;
 
 import com.parking.entity.Floor;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.mongodb.repository.MongoRepository;
+
 import java.util.List;
 
-public interface FloorRepository extends JpaRepository<Floor, Integer> {
-    @Query("SELECT f FROM Floor f LEFT JOIN FETCH f.dedicatedVehicleType")
-    List<Floor> findAllWithVehicleType();
+public interface FloorRepository extends MongoRepository<Floor, Integer> {
+
+    /** DBRef dedicatedVehicleType tu load (eager) nen findAll() da du chi tiet. */
+    default List<Floor> findAllWithVehicleType() {
+        return findAll();
+    }
 }
