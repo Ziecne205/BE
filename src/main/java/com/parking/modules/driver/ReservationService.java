@@ -40,6 +40,19 @@ public class ReservationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
 
+        // Check limits
+        long userActiveBookings = reservationRepository.countByUser_UserIdAndStatusIn(user.getUserId(), List.of("Pending", "Confirmed"));
+        if (userActiveBookings >= 3) {
+            throw new BusinessRuleException("Mot tai khoan chi duoc phep co toi da 3 ve dang hoat dong");
+        }
+
+        List<Reservation> overlapping = reservationRepository.findByLicensePlateAndStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
+                request.getLicensePlate(), List.of("Pending", "Confirmed"),
+                request.getExpectedExitTime(), request.getExpectedEntryTime());
+        if (!overlapping.isEmpty()) {
+            throw new BusinessRuleException("Bien so nay da co dat cho trong khung gio ban chon");
+        }
+
         checkQuota(request, vehicleType);
 
         PricingPolicy policy = pricingPolicyRepository
