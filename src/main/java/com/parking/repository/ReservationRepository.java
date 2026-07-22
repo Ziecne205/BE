@@ -19,4 +19,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
 
     List<Reservation> findByLicensePlateAndStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
             String licensePlate, List<String> statuses, LocalDateTime end, LocalDateTime start);
+            
+    List<Reservation> findByStatusAndCreatedAtBefore(String status, LocalDateTime cutoff);
+    
+    List<Reservation> findByStatus(String status);
 }
