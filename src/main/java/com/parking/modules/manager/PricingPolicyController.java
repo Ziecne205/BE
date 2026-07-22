@@ -16,7 +16,7 @@ import java.util.List;
 @RequestMapping("/api/manager/pricing-policies")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Pricing Policies", description = "Cau hinh chinh sach gia gui xe (Phan he 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class PricingPolicyController {
 
     private final PricingPolicyService pricingPolicyService;

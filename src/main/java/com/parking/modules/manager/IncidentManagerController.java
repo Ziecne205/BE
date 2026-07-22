@@ -15,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api/manager/incidents")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Incidents", description = "Quan ly su co bai do xe - xem, xu ly, giai quyet (Phan he 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class IncidentManagerController {
 
     private final IncidentManagerService incidentManagerService;

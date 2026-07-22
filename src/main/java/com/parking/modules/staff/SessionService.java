@@ -129,6 +129,15 @@ public class SessionService {
             }
         }
 
+        // Chan trung check-in: 2 cong cung check-in 1 bien so dong thoi, hoac 1 ket noi bi rot
+        // khien client retry va tao phien mo cua ("orphan") thu hai cho cung bien so. Chay duoi
+        // @Transactional(SERIALIZABLE) nen check-va-tao nay la nguyen tu.
+        if (sessionRepository.findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
+                .isPresent()) {
+            throw new BusinessRuleException(
+                    "Bien so " + request.getLicensePlate() + " da co phien gui xe dang mo", "DUPLICATE_OPEN_SESSION");
+        }
+
         ParkingSlot suggestedSlot = slotRepository
                 .findByVehicleType_VehicleTypeIdAndStatus(vehicleType.getVehicleTypeId(), "Available")
                 .stream().findFirst().orElse(null);

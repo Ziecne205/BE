@@ -15,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api/manager/dashboard")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Dashboard", description = "Giam sat trang thai bai do xe real-time (Phan he 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class DashboardController {
 
     private final DashboardService dashboardService;

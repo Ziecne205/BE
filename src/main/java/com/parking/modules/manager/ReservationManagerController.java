@@ -23,7 +23,7 @@ import java.util.UUID;
 @RequestMapping("/api/manager/reservations")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Reservations", description = "Xem toan bo dat cho (Phan he 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class ReservationManagerController {
 
     private final ReservationService reservationService;

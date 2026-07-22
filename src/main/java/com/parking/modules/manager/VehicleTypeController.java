@@ -15,7 +15,7 @@ import java.util.List;
 @RequestMapping("/api/manager/vehicle-types")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Vehicle Types", description = "Quản lý danh mục loại phương tiện (Phân hệ 1)")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class VehicleTypeController {
 
     private final VehicleTypeService vehicleTypeService;

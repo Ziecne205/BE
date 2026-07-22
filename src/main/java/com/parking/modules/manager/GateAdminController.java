@@ -14,7 +14,7 @@ import java.util.List;
 @RequestMapping("/api/manager/gates")
 @RequiredArgsConstructor
 @Tag(name = "Manager - Gates", description = "Quan ly cong vao/ra (CRUD) - phan he Quan ly bai xe")
-@PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+@PreAuthorize("hasRole('MANAGER')")
 public class GateAdminController {
 
     private final GateService gateService;

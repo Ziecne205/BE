@@ -17,7 +17,7 @@ import java.util.List;
 @Tag(name = "Manager - Parking Slots", description = "Quan ly o do xe - co so ha tang bai do (Phan he 1)")
 // Doc (GET) mo cho STAFF de dashboard + so do o hoat dong; ghi (POST/PUT/PATCH/DELETE)
 // van chi Manager/Admin (khai bao o tung method ben duoi — method-level de len class-level).
-@PreAuthorize("hasAnyRole('STAFF', 'MANAGER', 'ADMIN')")
+@PreAuthorize("hasAnyRole('STAFF', 'MANAGER')")
 public class ParkingSlotController {
 
     private final ParkingSlotService parkingSlotService;
@@ -41,14 +41,14 @@ public class ParkingSlotController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Tao moi o do xe")
     public ApiResponse<ParkingSlot> create(@Valid @RequestBody ParkingSlotRequest request) {
         return ApiResponse.ok("Tao o do xe thanh cong", parkingSlotService.create(request));
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Cap nhat thong tin o do xe")
     public ApiResponse<ParkingSlot> update(@PathVariable Long id,
                                            @Valid @RequestBody ParkingSlotRequest request) {
@@ -56,7 +56,7 @@ public class ParkingSlotController {
     }
 
     @PatchMapping("/{id}/maintenance")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Chuyen o sang trang thai Maintenance (chi Manager)")
     public ApiResponse<ParkingSlot> setMaintenance(@PathVariable Long id,
                                                    @RequestParam boolean maintenance) {
@@ -66,7 +66,7 @@ public class ParkingSlotController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
+    @PreAuthorize("hasRole('MANAGER')")
     @Operation(summary = "Xoa o do xe (khong co xe)")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         parkingSlotService.delete(id);
