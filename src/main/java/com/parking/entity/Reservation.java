@@ -37,6 +37,8 @@ public class Reservation {
 
     private BigDecimal depositAmount;
 
+    private BigDecimal priceAtBookingTime;
+
     private String depositStatus; // Pending, Paid, Forfeited, Refunded
 
     private String status; // Pending, Confirmed, CheckedIn, Fulfilled, Cancelled, Expired
