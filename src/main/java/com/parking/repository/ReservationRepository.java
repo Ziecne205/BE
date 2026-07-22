@@ -23,4 +23,7 @@ public interface ReservationRepository extends JpaRepository<Reservation, Long> 
     List<Reservation> findByStatusAndCreatedAtBefore(String status, LocalDateTime cutoff);
     
     List<Reservation> findByStatus(String status);
+    
+    List<Reservation> findByVehicleType_VehicleTypeIdAndStatusInAndExpectedEntryTimeLessThanAndExpectedExitTimeGreaterThan(
+            Integer vehicleTypeId, List<String> statuses, LocalDateTime end, LocalDateTime start);
 }
