@@ -121,7 +121,65 @@ public class SessionService {
                         session.getVehicleType().getVehicleTypeId(), "Active")
                 .orElseThrow(() -> new ResourceNotFoundException("Chua co bang gia cho loai xe nay"));
 
-        BigDecimal amount = calculateAmount(policy, minutes, request.isLostTicket());
+        BigDecimal amount;
+        BigDecimal baseFee = BigDecimal.ZERO;
+        BigDecimal overstayFee = BigDecimal.ZERO;
+
+        if (session.getReservation() != null) {
+            Reservation reservation = session.getReservation();
+            BigDecimal lockedPrice = reservation.getPriceAtBookingTime() != null ? reservation.getPriceAtBookingTime() : policy.getBasePrice();
+            
+            long expectedMinutes = Duration.between(reservation.getExpectedEntryTime(), reservation.getExpectedExitTime()).toMinutes();
+            if (expectedMinutes < 0) expectedMinutes = 0;
+            long expectedHours = (long) Math.ceil(expectedMinutes / 60.0);
+            
+            // Calculate base fee based on locked price
+            if (expectedHours <= policy.getBaseHours()) {
+                baseFee = lockedPrice;
+            } else {
+                long extraHours = expectedHours - policy.getBaseHours();
+                baseFee = lockedPrice.add(policy.getExtraHourPrice().multiply(BigDecimal.valueOf(extraHours)));
+            }
+
+            long overstayMinutes = Duration.between(reservation.getExpectedExitTime(), exitTime).toMinutes();
+            if (overstayMinutes > 10) {
+                double overstayBlocks = 0;
+                if (overstayMinutes <= 30) {
+                    overstayBlocks = 0.5;
+                } else {
+                    overstayBlocks = Math.ceil(overstayMinutes / 60.0);
+                }
+                
+                // Overstay rate = lockedPrice * 2 (as per user confirmation)
+                BigDecimal overstayRate = lockedPrice.multiply(BigDecimal.valueOf(2));
+                overstayFee = overstayRate.multiply(BigDecimal.valueOf(overstayBlocks));
+                
+                if (overstayMinutes > 30) {
+                    AuditLog incident = AuditLog.builder()
+                            .action("INCIDENT_OVERSTAY")
+                            .entityName("ParkingSession")
+                            .entityId(String.valueOf(session.getSessionId()))
+                            .detail("Overstay detected: " + overstayMinutes + " minutes")
+                            .createdAt(exitTime)
+                            .build();
+                    auditLogRepository.save(incident);
+                }
+            }
+            
+            amount = baseFee.add(overstayFee).subtract(reservation.getDepositAmount());
+            if (amount.compareTo(BigDecimal.ZERO) < 0) {
+                amount = BigDecimal.ZERO;
+            }
+            
+            if (request.isLostTicket() && policy.getLostTicketFee() != null) {
+                amount = amount.add(policy.getLostTicketFee());
+            }
+
+            reservation.setStatus("Fulfilled");
+            reservationRepository.save(reservation);
+        } else {
+            amount = calculateAmount(policy, minutes, request.isLostTicket());
+        }
 
         session.setLicensePlateOut(request.getLicensePlate());
         session.setExitImageUrl(request.getExitImageUrl());
@@ -129,12 +187,6 @@ public class SessionService {
         session.setExitTime(exitTime);
         session.setStatus("Completed");
         sessionRepository.save(session);
-
-        if (session.getReservation() != null) {
-            Reservation reservation = session.getReservation();
-            reservation.setStatus("Fulfilled");
-            reservationRepository.save(reservation);
-        }
 
         Payment payment = Payment.builder()
                 .session(session)
