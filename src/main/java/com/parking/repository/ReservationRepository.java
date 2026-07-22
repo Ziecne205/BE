@@ -35,4 +35,11 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     @Query(value = "{ 'vehicleType.$id': ?0, 'status': { $in: ?1 } }", sort = "{ 'createdAt': -1 }")
     List<Reservation> findByVehicleType_VehicleTypeIdAndStatusInOrderByCreatedAtDesc(
             Integer vehicleTypeId, List<String> statuses);
+
+    @CountQuery("{ 'user.$id': ?0, 'status': { $in: ?1 } }")
+    long countByUser_UserIdAndStatusIn(Long userId, List<String> statuses);
+
+    @Query("{ 'licensePlate': ?0, 'status': { $in: ?1 }, 'expectedExitTime': { $gt: ?2 }, 'expectedEntryTime': { $lt: ?3 } }")
+    List<Reservation> findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
+            String licensePlate, List<String> statuses, LocalDateTime start, LocalDateTime end);
 }

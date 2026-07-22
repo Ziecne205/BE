@@ -64,6 +64,17 @@ public class ReservationService {
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Không tìm thấy loại xe"));
 
+        long activeCount = reservationRepository.countByUser_UserIdAndStatusIn(user.getUserId(), List.of("Pending", "Confirmed", "CheckedIn"));
+        if (activeCount >= 3) {
+            throw new BusinessRuleException("Một tài khoản chỉ được phép có tối đa 3 vé đang hoạt động", "MAX_RESERVATIONS_REACHED");
+        }
+
+        List<Reservation> overlaps = reservationRepository.findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
+                request.getLicensePlate(), List.of("Pending", "Confirmed", "CheckedIn"), request.getExpectedEntryTime(), request.getExpectedExitTime());
+        if (!overlaps.isEmpty()) {
+            throw new BusinessRuleException("Biển số này đã có đặt chỗ trong khung giờ bạn chọn", "LICENSE_PLATE_OVERLAP");
+        }
+
         checkQuota(request, vehicleType);
 
         PricingPolicy policy = pricingPolicyRepository
@@ -89,6 +100,7 @@ public class ReservationService {
                 .expectedEntryTime(request.getExpectedEntryTime())
                 .expectedExitTime(request.getExpectedExitTime())
                 .depositAmount(deposit)
+                .priceAtBookingTime(policy.getBasePrice())
                 .depositStatus("Pending") // FE chuyen sang thanh toan coc de chuyen 'Paid' va Status -> Confirmed
                 .status("Pending")
                 .createdAt(LocalDateTime.now())
@@ -274,5 +286,29 @@ public class ReservationService {
         payosService.verifyPaymentStatus(Long.parseLong(payment.getTransactionReference()));
 
         return reservationRepository.findById(id).orElseThrow();
+    }
+
+    @Transactional
+    public Reservation extendReservation(UUID id, String username, LocalDateTime newExitTime) {
+        Reservation reservation = findById(id);
+        if (!reservation.getUser().getUsername().equals(username)) {
+            throw new BusinessRuleException("Bạn không có quyền gia hạn booking này");
+        }
+        if (!List.of("Confirmed", "CheckedIn").contains(reservation.getStatus())) {
+            throw new BusinessRuleException("Chỉ có thể gia hạn khi booking đã xác nhận hoặc đang đỗ");
+        }
+        if (!newExitTime.isAfter(reservation.getExpectedExitTime())) {
+            throw new BusinessRuleException("Giờ gia hạn phải dài hơn giờ dự kiến ra cũ");
+        }
+        
+        ReservationRequest mockRequest = new ReservationRequest();
+        mockRequest.setExpectedEntryTime(reservation.getExpectedExitTime());
+        mockRequest.setExpectedExitTime(newExitTime);
+        mockRequest.setVehicleTypeId(reservation.getVehicleType().getVehicleTypeId());
+        mockRequest.setLicensePlate(reservation.getLicensePlate());
+        checkQuota(mockRequest, reservation.getVehicleType());
+
+        reservation.setExpectedExitTime(newExitTime);
+        return reservationRepository.save(reservation);
     }
 }

@@ -450,12 +450,40 @@ public class SessionService {
      *   + lost-ticket fee                       (check-out only)
      */
     private BigDecimal computeFee(PricingPolicy policy, ParkingSession session, LocalDateTime exitTime, boolean lostTicket) {
-        BigDecimal fee = pricingService.calculateFee(policy, session.getEntryTime(), exitTime);
-        long hours = (long) Math.ceil(Duration.between(session.getEntryTime(), exitTime).toMinutes() / 60.0);
-        if (hours > OVERSTAY_GRACE_HOURS) {
-            BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
-            fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours - OVERSTAY_GRACE_HOURS)));
+        BigDecimal basePriceToUse = policy.getBasePrice();
+        Reservation reservation = session.getReservation();
+        if (reservation != null && reservation.getPriceAtBookingTime() != null) {
+            basePriceToUse = reservation.getPriceAtBookingTime();
         }
+
+        PricingPolicy lockedPolicy = PricingPolicy.builder()
+            .basePrice(basePriceToUse)
+            .baseHours(policy.getBaseHours())
+            .extraHourPrice(policy.getExtraHourPrice())
+            .nightSurcharge(policy.getNightSurcharge())
+            .lostTicketFee(policy.getLostTicketFee())
+            .build();
+
+        BigDecimal fee = pricingService.calculateFee(lockedPolicy, session.getEntryTime(), exitTime);
+
+        if (reservation != null) {
+            long overstayMinutes = Duration.between(reservation.getExpectedExitTime(), exitTime).toMinutes();
+            if (overstayMinutes > 10) {
+                long blocks = (long) Math.ceil(overstayMinutes / 60.0);
+                if (overstayMinutes > 10 && overstayMinutes <= 30) {
+                    fee = fee.add(basePriceToUse);
+                } else if (overstayMinutes > 30) {
+                    fee = fee.add(basePriceToUse.multiply(BigDecimal.valueOf(blocks * 2)));
+                }
+            }
+        } else {
+            long hours = (long) Math.ceil(Duration.between(session.getEntryTime(), exitTime).toMinutes() / 60.0);
+            if (hours > OVERSTAY_GRACE_HOURS) {
+                BigDecimal overstayRate = feeConfigService.getFeeConfig().getOverstayRatePerHour();
+                fee = fee.add(overstayRate.multiply(BigDecimal.valueOf(hours - OVERSTAY_GRACE_HOURS)));
+            }
+        }
+
         if (lostTicket && policy.getLostTicketFee() != null) {
             fee = fee.add(policy.getLostTicketFee());
         }
