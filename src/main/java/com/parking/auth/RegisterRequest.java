@@ -2,6 +2,7 @@ package com.parking.auth;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,9 +19,13 @@ public class RegisterRequest {
     @NotBlank
     private String fullName;
 
+    // SDT phai dung dung 10 chu so (khong khoang trang / ky tu khac).
+    @NotBlank(message = "Số điện thoại không được để trống")
+    @Pattern(regexp = "\\d{10}", message = "Số điện thoại phải gồm đúng 10 chữ số")
     private String phoneNumber;
 
-    @Email
+    @NotBlank(message = "Email không được để trống")
+    @Email(message = "Email không hợp lệ")
     private String email;
 
     // KHONG them truong roleName vao DTO nay. Dang ky cong khai LUON tao tai khoan Driver

@@ -28,6 +28,7 @@ import com.parking.repository.PasswordResetTokenRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
+@org.springframework.transaction.annotation.Transactional
 public class AuthService {
 
     private static final int OTP_TTL_MINUTES = 10;
@@ -185,6 +186,12 @@ public class AuthService {
         if (userRepository.existsByEmail(email)) {
             throw new BusinessRuleException("Email da duoc su dung");
         }
+        // Kiem tra trung SDT NGAY TAI DAY (truoc khi gui OTP) — neu de den luc save(user) moi cham
+        // unique index thi User da xac thuc OTP xong nhung ghi that bai -> tra 500 (loi truoc day).
+        String phone = request.getPhoneNumber();
+        if (phone != null && !phone.isBlank() && userRepository.existsByPhoneNumber(phone)) {
+            throw new BusinessRuleException("So dien thoai da duoc su dung");
+        }
 
         purgeExpiredRegistrations();
         String otp = randomOtp();
@@ -225,10 +232,15 @@ public class AuthService {
         if (!pending.otp().equals(otp)) {
             throw new BadRequestException("Ma OTP khong hop le", "INVALID_OTP");
         }
-        // Trong luc cho OTP, username/email co the da bi dang ky boi mot luong khac.
+        // Trong luc cho OTP, username/email/SDT co the da bi dang ky boi mot luong khac.
         if (userRepository.existsByUsername(pending.username()) || userRepository.existsByEmail(pending.email())) {
             pendingRegistrations.remove(key);
             throw new BusinessRuleException("Tai khoan da ton tai");
+        }
+        if (pending.phoneNumber() != null && !pending.phoneNumber().isBlank()
+                && userRepository.existsByPhoneNumber(pending.phoneNumber())) {
+            pendingRegistrations.remove(key);
+            throw new BusinessRuleException("So dien thoai da duoc su dung");
         }
 
         Role role = roleRepository.findByRoleName("Driver")
