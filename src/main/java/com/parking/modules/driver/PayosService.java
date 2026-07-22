@@ -131,6 +131,12 @@ public class PayosService {
         return callCreatePaymentLink(orderCode, safeAmount, truncate(description, 25));
     }
 
+    /** Nhu tren nhung refId la UUID (vd reservationId) thay vi so — dung chung cach bam voi
+     * createDepositLink de tranh trung orderCode giua cac loai giao dich khac nhau tren cung 1 booking. */
+    public PayosLinkResponse createLinkForAmount(UUID refId, long amount, String description) {
+        return createLinkForAmount(Math.abs((long) refId.hashCode()), amount, description);
+    }
+
     private PayosLinkResponse callCreatePaymentLink(long orderCode, long amount, String description) {
         // Chu ky: cac field sap xep theo alphabet.
         String signData = "amount=" + amount

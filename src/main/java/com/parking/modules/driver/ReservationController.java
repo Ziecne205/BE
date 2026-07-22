@@ -71,10 +71,11 @@ public class ReservationController {
     }
 
     @PostMapping("/{id}/extend")
-    public ApiResponse<ReservationDTO> extendReservation(
+    public ApiResponse<ExtendReservationResponse> extendReservation(
             @PathVariable UUID id,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime newExitTime,
             Authentication auth) {
-        return ApiResponse.ok("Gia han thanh cong", ReservationDTO.from(reservationService.extendReservation(id, auth.getName(), newExitTime)));
+        return ApiResponse.ok("Gia han thanh cong, vui long thanh toan phi gia han",
+                reservationService.extendReservation(id, auth.getName(), newExitTime));
     }
 }

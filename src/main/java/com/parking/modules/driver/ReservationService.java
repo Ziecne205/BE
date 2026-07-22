@@ -9,8 +9,11 @@ import com.parking.modules.manager.FeeConfigService;
 import com.parking.modules.manager.FeeConfigResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,6 +40,7 @@ public class ReservationService {
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
     private final PricingService pricingService;
+    private final PlatformTransactionManager txManager;
 
     // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
     // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
@@ -339,27 +343,75 @@ public class ReservationService {
         return reservationRepository.findById(id).orElseThrow();
     }
 
-    @Transactional
-    public Reservation extendReservation(UUID id, String username, LocalDateTime newExitTime) {
-        Reservation reservation = findById(id);
-        if (!reservation.getUser().getUsername().equals(username)) {
-            throw new BusinessRuleException("Bạn không có quyền gia hạn booking này");
-        }
-        if (!List.of("Confirmed", "CheckedIn").contains(reservation.getStatus())) {
-            throw new BusinessRuleException("Chỉ có thể gia hạn khi booking đã xác nhận hoặc đang đỗ");
-        }
-        if (!newExitTime.isAfter(reservation.getExpectedExitTime())) {
-            throw new BusinessRuleException("Giờ gia hạn phải dài hơn giờ dự kiến ra cũ");
-        }
-        
-        ReservationRequest mockRequest = new ReservationRequest();
-        mockRequest.setExpectedEntryTime(reservation.getExpectedExitTime());
-        mockRequest.setExpectedExitTime(newExitTime);
-        mockRequest.setVehicleTypeId(reservation.getVehicleType().getVehicleTypeId());
-        mockRequest.setLicensePlate(reservation.getLicensePlate());
-        checkQuota(mockRequest, reservation.getVehicleType());
+    /** Gia tri nguyen thuy trich tu pha doc de dung sau khi transaction da dong. */
+    private record ExtensionQuote(UUID reservationId, String licensePlate, BigDecimal fee) {
+    }
 
-        reservation.setExpectedExitTime(newExitTime);
-        return reservationRepository.save(reservation);
+    /**
+     * Gia han booking + tinh phi cho phan gia han THEO GIA HIEN HANH (khong dung snapshot luc dat
+     * cho — day la mot giao dich moi, xem phase-5 doc). Chia 3 pha giong het
+     * SessionService.createFeeLink de KHONG giu ket noi DB trong luc goi PayOS (HTTP co the mat
+     * ~15s): (1) kiem tra quyen/trang thai + checkQuota + tinh phi trong 1 tx ngan, (2) goi PayOS
+     * khi khong con giu tx, (3) cap nhat expectedExitTime + luu Payment "Pending" trong 1 tx ngan.
+     * originalExpectedExitTime KHONG bi dong vao day (van tro nguyen tu luc dat cho dau tien) de
+     * base_fee o checkout (Phase 4) van gioi han dung khung gio da khoa gia ban dau.
+     */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    public ExtendReservationResponse extendReservation(UUID id, String username, LocalDateTime newExitTime) {
+        TransactionTemplate tx = new TransactionTemplate(txManager);
+
+        ExtensionQuote quote = tx.execute(status -> {
+            Reservation reservation = findById(id);
+            if (!reservation.getUser().getUsername().equals(username)) {
+                throw new BusinessRuleException("Bạn không có quyền gia hạn booking này");
+            }
+            if (!List.of("Confirmed", "CheckedIn").contains(reservation.getStatus())) {
+                throw new BusinessRuleException("Chỉ có thể gia hạn khi booking đã xác nhận hoặc đang đỗ");
+            }
+            if (!newExitTime.isAfter(reservation.getExpectedExitTime())) {
+                throw new BusinessRuleException("Giờ gia hạn phải dài hơn giờ dự kiến ra cũ");
+            }
+
+            ReservationRequest mockRequest = new ReservationRequest();
+            mockRequest.setExpectedEntryTime(reservation.getExpectedExitTime());
+            mockRequest.setExpectedExitTime(newExitTime);
+            mockRequest.setVehicleTypeId(reservation.getVehicleType().getVehicleTypeId());
+            mockRequest.setLicensePlate(reservation.getLicensePlate());
+            checkQuota(mockRequest, reservation.getVehicleType());
+
+            // Gia CURRENT policy (khong phai snapshot) — gia han la giao dich moi, tinh theo bang
+            // gia Manager cau hinh HIEN TAI cho doan thoi gian them [expectedExitTime cu, newExitTime).
+            BigDecimal extensionFee = pricingService.calculateFee(
+                    reservation.getVehicleType().getVehicleTypeId(), reservation.getExpectedExitTime(), newExitTime);
+
+            return new ExtensionQuote(reservation.getReservationId(), reservation.getLicensePlate(), extensionFee);
+        });
+
+        // Pha 2 (KHONG giu tx): goi PayOS — khong ghim ket noi DB trong suot HTTP call.
+        PayosLinkResponse link = payosService.createLinkForAmount(
+                quote.reservationId(), quote.fee().longValue(), "Gia han " + quote.licensePlate());
+
+        Reservation updated = tx.execute(status -> {
+            Reservation reservation = findById(quote.reservationId());
+            reservation.setExpectedExitTime(newExitTime);
+            Reservation saved = reservationRepository.save(reservation);
+
+            paymentRepository.save(Payment.builder()
+                    .reservation(saved)
+                    .amount(BigDecimal.valueOf(link.getAmount()))
+                    .paymentMethod("PayOS")
+                    .paymentTime(LocalDateTime.now())
+                    .paymentStatus("Pending")
+                    .paymentPurpose("Extension")
+                    .transactionReference(String.valueOf(link.getOrderCode()))
+                    .build());
+
+            return saved;
+        });
+
+        return ExtendReservationResponse.builder()
+                .reservation(ReservationDTO.from(updated))
+                .payment(link)
+                .build();
     }
 }
