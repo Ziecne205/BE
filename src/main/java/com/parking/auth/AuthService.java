@@ -28,7 +28,6 @@ import com.parking.repository.PasswordResetTokenRepository;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-@org.springframework.transaction.annotation.Transactional
 public class AuthService {
 
     private static final int OTP_TTL_MINUTES = 10;
