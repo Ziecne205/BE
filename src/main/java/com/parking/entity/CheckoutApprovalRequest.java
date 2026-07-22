@@ -46,6 +46,17 @@ public class CheckoutApprovalRequest {
 
     private String reason;
 
+    // --- Ngu canh tinh phi tai thoi diem Staff yeu cau checkout, luu lai de approve() finalize
+    // dung y het (khong tinh lai theo thoi diem Manager duyet, co the la nhieu gio sau) ---
+    private LocalDateTime exitTime;
+    private long parkedMinutes;
+    private boolean overstay;
+    private BigDecimal totalFee;
+    private BigDecimal lostTicketFee;
+    private boolean plateMismatch;
+    private BigDecimal depositAlreadyPaid;
+    private BigDecimal alreadySettledOnline;
+
     private String requestedBy;
 
     private String status; // Open, Approved, Rejected

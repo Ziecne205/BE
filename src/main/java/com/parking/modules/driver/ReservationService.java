@@ -285,17 +285,25 @@ public class ReservationService {
      * - Driver huy chu dong (refund=true, status=Cancelled) qua {@link #cancel(Long, String)}.
      * - Scheduler no-show (refund=false/forfeit, status=Expired).
      * - Manager cascade khi o bao tri lam mat suc chua (refund=true, status=Cancelled).
-     * Khong co cong thanh toan hoan tien tu dong that (PayOS hoan coc la thu cong theo ghi chu
-     * nghiep vu) nen o day chi cap nhat depositStatus de phan anh ket qua tai chinh; doi tac
-     * thanh toan xu ly hoan tien thuc te ngoai luong nay.
+     * Khi refund=true thuc su goi PayOS (Phase 6.1): coc da "Paid" -> attemptRefundPaidDeposit
+     * (that bai/chua cau hinh Payout se roi vao hang ManualRequired thay vi nem loi — huy booking
+     * van phai thanh cong du hoan tien co thuc hien duoc ngay hay khong); coc con "Pending" (chua
+     * kip thanh toan) -> cancelPaymentLink de vo hieu hoa link/QR cu. refund=false (no-show/forfeit)
+     * khong goi PayOS.
      */
     @Transactional
     public Reservation cancelWithRefund(Reservation reservation, String newStatus, boolean refund) {
         reservation.setStatus(newStatus);
-        // Neu da dong coc thi phan anh ket qua tai chinh: refund=true -> Refunded, forfeit -> Forfeited.
-        // (Hoan/mat coc thuc te do PayOS xu ly thu cong, o day chi cap nhat trang thai.)
-        if ("Paid".equals(reservation.getDepositStatus())) {
-            reservation.setDepositStatus(refund ? "Refunded" : "Forfeited");
+        String depositStatus = reservation.getDepositStatus();
+        if (refund && "Paid".equals(depositStatus)) {
+            payosService.attemptRefundPaidDeposit(reservation, "Booking " + newStatus + " - hoan coc da thanh toan");
+            reservation.setDepositStatus("Refunded");
+        } else if (refund && "Pending".equals(depositStatus)) {
+            payosService.findPendingDepositOrderCode(reservation)
+                    .ifPresent(orderCode -> payosService.cancelPaymentLink(
+                            orderCode, "Booking " + newStatus + " - huy truoc khi thanh toan coc"));
+        } else if (!refund && "Paid".equals(depositStatus)) {
+            reservation.setDepositStatus("Forfeited");
         }
         return reservationRepository.save(reservation);
     }

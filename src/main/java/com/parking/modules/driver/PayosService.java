@@ -54,6 +54,13 @@ public class PayosService {
     private String returnUrl;
     @Value("${payos.cancel-url:http://localhost:3000/driver/payment/return?cancel=true}")
     private String cancelUrl;
+    // PayOS's public REST API has no generic "refund a completed payment" endpoint — only a
+    // separate Payout product (POST /v1/payouts) requiring a funded payout balance and recipient
+    // bank details, neither collected anywhere in this codebase today. Default off (the realistic
+    // state of this merchant account); attemptRefundPaidDeposit() falls back to ManualRequired
+    // bookkeeping whenever this is false, per phase-6-independent-items.md 6.1's explicit fallback.
+    @Value("${payos.payout.enabled:false}")
+    private boolean payoutEnabled;
 
     /** Cat khoang trang/xuong dong thua khi copy-paste key vao bien moi truong — tranh loi
      *  "Illegal character(s) in message header value" khi dat key vao HTTP header (x-client-id...). */
@@ -135,6 +142,83 @@ public class PayosService {
      * createDepositLink de tranh trung orderCode giua cac loai giao dich khac nhau tren cung 1 booking. */
     public PayosLinkResponse createLinkForAmount(UUID refId, long amount, String description) {
         return createLinkForAmount(Math.abs((long) refId.hashCode()), amount, description);
+    }
+
+    /**
+     * Huy mot payment-request PayOS con "Pending" (chua thanh toan) — dung khi booking bi huy
+     * truoc khi khach kip tra coc, de link/QR cu khong con dung duoc nua (item 6, Phase 6.1).
+     */
+    public void cancelPaymentLink(String orderCode, String reason) {
+        if (clientId == null || clientId.isBlank()) {
+            throw new BusinessRuleException("PayOS chua duoc cau hinh (thieu key)", "PAYOS_NOT_CONFIGURED");
+        }
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("x-client-id", clientId);
+        headers.set("x-api-key", apiKey);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("cancellationReason", reason == null || reason.isBlank() ? "Booking cancelled" : reason);
+
+        JsonNode root;
+        try {
+            ResponseEntity<JsonNode> resp = restTemplate.postForEntity(
+                    CREATE_URL + "/" + orderCode + "/cancel", new HttpEntity<>(body, headers), JsonNode.class);
+            root = resp.getBody();
+        } catch (Exception e) {
+            log.error("[PayOS-cancel] orderCode={} loi goi API: {}", orderCode, e.getMessage());
+            throw new BusinessRuleException("Loi goi PayOS de huy link thanh toan: " + e.getMessage(), "PAYOS_ERROR");
+        }
+        if (root == null || !"00".equals(root.path("code").asText())) {
+            String desc = root == null ? "khong co phan hoi" : root.path("desc").asText();
+            throw new BusinessRuleException("PayOS tu choi huy link: " + desc, "PAYOS_ERROR");
+        }
+        log.info("[PayOS-cancel] orderCode={} da huy thanh cong ({})", orderCode, reason);
+    }
+
+    /**
+     * Hoan coc da thanh toan (depositStatus=="Paid") khi booking bi huy. PayOS khong co endpoint
+     * hoan tien chung cho payment-request da hoan tat — chi co san pham Payout rieng
+     * (POST /v1/payouts) can so du payout da nap va thong tin ngan hang nguoi nhan, ca hai deu
+     * chua duoc thu thap/cau hinh trong repo nay. Khi payoutEnabled=false (mac dinh, dung thuc te
+     * hien tai) chuyen thang sang bookkeeping: Payment.refundStatus="ManualRequired" de xep vao
+     * hang cho xu ly thu cong (xem GET /api/manager/payments?refundStatus=ManualRequired), va
+     * KHONG nem loi — cancelWithRefund() van phai hoan tat cap nhat trang thai booking dung han.
+     */
+    @Transactional
+    public void attemptRefundPaidDeposit(Reservation reservation, String reason) {
+        Payment deposit = paymentRepository
+                .findByReservation_ReservationIdAndPaymentPurpose(reservation.getReservationId(), "Deposit")
+                .stream()
+                .filter(p -> "Success".equals(p.getPaymentStatus()))
+                .max(java.util.Comparator.comparing(Payment::getPaymentId))
+                .orElse(null);
+        if (deposit == null) {
+            log.warn("[PayOS-refund] Reservation {} depositStatus=Paid nhung khong tim thay Payment Deposit Success tuong ung",
+                    reservation.getReservationId());
+            return;
+        }
+        if (payoutEnabled) {
+            // Payout product chua duoc tich hop (thieu so du/thong tin ngan hang) — khi bat co
+            // duoc cau hinh that, day la noi goi POST /v1/payouts. Cho den luc do, coi nhu that bai
+            // va roi xuong nhanh fallback ben duoi thay vi gia vo thanh cong.
+            log.warn("[PayOS-refund] payoutEnabled=true nhung Payout API chua duoc trien khai — fallback ManualRequired");
+        }
+        deposit.setRefundStatus("ManualRequired");
+        paymentRepository.save(deposit);
+        log.warn("[PayOS-refund] Reservation {} can hoan coc thu cong (paymentId={}, amount={}, ly do: {})",
+                reservation.getReservationId(), deposit.getPaymentId(), deposit.getAmount(), reason);
+    }
+
+    /** Payment(paymentPurpose="Deposit", paymentStatus="Pending") gan nhat cua mot reservation, de
+     * lay orderCode goi cancelPaymentLink khi booking bi huy truoc khi kip thanh toan coc. */
+    public java.util.Optional<String> findPendingDepositOrderCode(Reservation reservation) {
+        return paymentRepository
+                .findByReservation_ReservationIdAndPaymentPurpose(reservation.getReservationId(), "Deposit")
+                .stream()
+                .filter(p -> "Pending".equals(p.getPaymentStatus()) && p.getTransactionReference() != null)
+                .max(java.util.Comparator.comparing(Payment::getPaymentId))
+                .map(Payment::getTransactionReference);
     }
 
     private PayosLinkResponse callCreatePaymentLink(long orderCode, long amount, String description) {

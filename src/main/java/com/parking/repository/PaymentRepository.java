@@ -18,6 +18,9 @@ public interface PaymentRepository extends MongoRepository<Payment, Long>, Payme
 
     Optional<Payment> findFirstByTransactionReference(String transactionReference);
 
+    /** Hang cho xu ly hoan tien thu cong (Phase 6.1) — vd refundStatus="ManualRequired". */
+    List<Payment> findByRefundStatus(String refundStatus);
+
     @Query(value = "{ 'reservation.$id': ?0 }", sort = "{ 'paymentId': -1 }")
     Optional<Payment> findFirstByReservation_ReservationIdOrderByPaymentIdDesc(UUID reservationId);
 

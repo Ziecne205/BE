@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -28,8 +29,11 @@ public class SessionController {
 
     @PostMapping("/check-out")
     @Operation(summary = "Check-out xe ra khoi bai")
-    public ApiResponse<CheckOutResponse> checkOut(@Valid @RequestBody CheckOutRequest request) {
-        return ApiResponse.ok("Xe ra thanh cong", sessionService.checkOut(request));
+    public ApiResponse<CheckOutResponse> checkOut(@Valid @RequestBody CheckOutRequest request, Authentication auth) {
+        CheckOutResponse response = sessionService.checkOut(request, auth.getName());
+        return ApiResponse.ok(response.isPendingApproval()
+                ? "So tien thu lech qua muc cho phep - da gui Manager duyet"
+                : "Xe ra thanh cong", response);
     }
 
     @GetMapping("/active")

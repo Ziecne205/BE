@@ -61,6 +61,7 @@ public class SessionService {
     private final PricingService pricingService;
     private final PayosService payosService;
     private final PlatformTransactionManager txManager;
+    private final CheckoutApprovalRequestRepository checkoutApprovalRequestRepository;
 
     /**
      * Walk-in headroom = C (slot kha dung, khong Maintenance) - Inside(t) -
@@ -235,7 +236,7 @@ public class SessionService {
     }
 
     @Transactional
-    public CheckOutResponse checkOut(CheckOutRequest request) {
+    public CheckOutResponse checkOut(CheckOutRequest request, String staffUsername) {
         ParkingSession session = sessionRepository
                 .findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so nay"));
@@ -265,8 +266,169 @@ public class SessionService {
 
         boolean plateMismatch = !session.getLicensePlateIn().equalsIgnoreCase(request.getLicensePlate());
 
-        session.setLicensePlateOut(request.getLicensePlate());
-        session.setExitImageUrl(request.getExitImageUrl());
+        // Deposit — subtract what was already collected at booking time (item 4/Phase 4).
+        BigDecimal depositAlreadyPaid = (reservation != null && "Paid".equals(reservation.getDepositStatus())
+                && reservation.getDepositAmount() != null) ? reservation.getDepositAmount() : BigDecimal.ZERO;
+
+        // Settlement — sum ALL Success payments already collected online for this session/
+        // reservation (Fee-purpose QR/VNPay paid before the gate, Extension-purpose paid at
+        // extend-time) instead of findFirst(), so neither is missed nor double-charged at the gate.
+        List<Payment> onlineFeePayments = paymentRepository.findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(
+                session.getSessionId(), "Success", List.of("Fee"));
+        List<Payment> onlineExtensionPayments = reservation != null
+                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
+                        reservation.getReservationId(), "Success", List.of("Extension"))
+                : List.of();
+        BigDecimal alreadySettledOnline = BigDecimal.ZERO;
+        for (Payment p : onlineFeePayments) {
+            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
+            if (p.getReservation() == null && reservation != null) {
+                p.setReservation(reservation);
+                paymentRepository.save(p);
+            }
+        }
+        for (Payment p : onlineExtensionPayments) {
+            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
+        }
+
+        BigDecimal amountDue = totalFee.subtract(depositAlreadyPaid).subtract(alreadySettledOnline).max(BigDecimal.ZERO);
+
+        // Cash wrong-amount guard (Phase 6, item 2): so far nothing has been mutated yet (session
+        // still open, slot/card untouched) — if the cash collected at the gate is outside tolerance
+        // of amountDue, park the whole checkout as a pending CheckoutApprovalRequest instead of
+        // completing it, so a Manager reconciles the discrepancy before the books are closed.
+        if (request.getCollectedAmount() != null) {
+            BigDecimal tolerance = feeConfigService.getFeeConfig().getCashToleranceVnd();
+            if (tolerance == null) tolerance = BigDecimal.ZERO;
+            BigDecimal diff = request.getCollectedAmount().subtract(amountDue).abs();
+            if (diff.compareTo(tolerance) > 0) {
+                if (request.getDiscountReason() == null || request.getDiscountReason().isBlank()) {
+                    throw new BusinessRuleException(
+                            "So tien thu (" + request.getCollectedAmount() + ") lech qua muc cho phep (tolerance="
+                                    + tolerance + ") so voi so phai thu (" + amountDue
+                                    + ") - can nhap discountReason de gui Manager duyet",
+                            "CASH_AMOUNT_MISMATCH");
+                }
+                CheckoutApprovalRequest approval = CheckoutApprovalRequest.builder()
+                        .sessionId(session.getSessionId())
+                        .licensePlate(request.getLicensePlate())
+                        .exitGateId(exitGate.getGateId())
+                        .exitImageUrl(request.getExitImageUrl())
+                        .lostTicket(lostTicket)
+                        .paymentMethod(request.getPaymentMethod())
+                        .requestedAmount(request.getCollectedAmount())
+                        .computedAmount(amountDue)
+                        .reason(request.getDiscountReason())
+                        .requestedBy(staffUsername)
+                        .status("Open")
+                        .exitTime(exitTime)
+                        .parkedMinutes(minutes)
+                        .overstay(overstay)
+                        .totalFee(totalFee)
+                        .lostTicketFee(lostTicketFee)
+                        .plateMismatch(plateMismatch)
+                        .depositAlreadyPaid(depositAlreadyPaid)
+                        .alreadySettledOnline(alreadySettledOnline)
+                        .createdAt(LocalDateTime.now())
+                        .build();
+                approval = checkoutApprovalRequestRepository.save(approval);
+
+                return CheckOutResponse.builder()
+                        .sessionId(session.getSessionId())
+                        .licensePlateIn(session.getLicensePlateIn())
+                        .licensePlateOut(request.getLicensePlate())
+                        .plateMismatch(plateMismatch)
+                        .entryTime(session.getEntryTime())
+                        .exitTime(exitTime)
+                        .parkedMinutes(minutes)
+                        .vehicleTypeName(session.getVehicleType().getTypeName())
+                        .amount(amountDue)
+                        .lostTicketFee(lostTicketFee)
+                        .paymentMethod(request.getPaymentMethod())
+                        .paymentStatus("PendingApproval")
+                        .exitGateName(exitGate.getGateName())
+                        .isOverstay(overstay)
+                        .pendingApproval(true)
+                        .approvalRequestId(approval.getApprovalId())
+                        .build();
+            }
+        }
+
+        return finalizeCheckout(session, exitGate, reservation, request.getLicensePlate(), request.getExitImageUrl(),
+                lostTicket, request.getPaymentMethod(), exitTime, minutes, overstay, totalFee, lostTicketFee,
+                plateMismatch, depositAlreadyPaid, alreadySettledOnline, onlineFeePayments, onlineExtensionPayments,
+                amountDue, request.getCollectedAmount());
+    }
+
+    /**
+     * Manager duyet mot CheckoutApprovalRequest dang Open: hoan tat checkout dung nhu Staff da
+     * yeu cau ban dau (dung lai toan bo ngu canh da luu — KHONG tinh lai phi theo thoi diem duyet),
+     * thu chinh xac so tien Staff da bao cao thu (requestedAmount) thay vi computedAmount.
+     */
+    @Transactional
+    public CheckOutResponse approveCheckoutRequest(Long approvalId, String managerUsername) {
+        CheckoutApprovalRequest approval = checkoutApprovalRequestRepository.findById(approvalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay yeu cau duyet checkout #" + approvalId));
+        if (!"Open".equals(approval.getStatus())) {
+            throw new BusinessRuleException("Yeu cau duyet checkout #" + approvalId + " da duoc xu ly", "ALREADY_DECIDED");
+        }
+        ParkingSession session = sessionRepository.findById(approval.getSessionId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien #" + approval.getSessionId()));
+        Gate exitGate = gateRepository.findById(approval.getExitGateId())
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay cong ra"));
+
+        List<Payment> onlineFeePayments = paymentRepository.findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(
+                session.getSessionId(), "Success", List.of("Fee"));
+        Reservation reservation = session.getReservation();
+        List<Payment> onlineExtensionPayments = reservation != null
+                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
+                        reservation.getReservationId(), "Success", List.of("Extension"))
+                : List.of();
+
+        CheckOutResponse response = finalizeCheckout(session, exitGate, reservation, approval.getLicensePlate(),
+                approval.getExitImageUrl(), approval.isLostTicket(), approval.getPaymentMethod(),
+                approval.getExitTime(), approval.getParkedMinutes(), approval.isOverstay(), approval.getTotalFee(),
+                approval.getLostTicketFee(), approval.isPlateMismatch(), approval.getDepositAlreadyPaid(),
+                approval.getAlreadySettledOnline(), onlineFeePayments, onlineExtensionPayments,
+                approval.getComputedAmount(), approval.getRequestedAmount());
+
+        approval.setStatus("Approved");
+        approval.setDecidedBy(managerUsername);
+        approval.setDecidedAt(LocalDateTime.now());
+        checkoutApprovalRequestRepository.save(approval);
+
+        return response;
+    }
+
+    /** Manager tu choi: yeu cau van "Open" bi dong lai "Rejected", phien gui xe van con mo de Staff xu ly lai. */
+    @Transactional
+    public CheckoutApprovalRequest rejectCheckoutRequest(Long approvalId, String managerUsername) {
+        CheckoutApprovalRequest approval = checkoutApprovalRequestRepository.findById(approvalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay yeu cau duyet checkout #" + approvalId));
+        if (!"Open".equals(approval.getStatus())) {
+            throw new BusinessRuleException("Yeu cau duyet checkout #" + approvalId + " da duoc xu ly", "ALREADY_DECIDED");
+        }
+        approval.setStatus("Rejected");
+        approval.setDecidedBy(managerUsername);
+        approval.setDecidedAt(LocalDateTime.now());
+        return checkoutApprovalRequestRepository.save(approval);
+    }
+
+    /**
+     * Phan hoan tat checkout thuc su (mutate session/slot/card, ghi Payment/AuditLog) — dung chung
+     * boi checkOut() khi trong tolerance/khong co collectedAmount, va boi approveCheckoutRequest()
+     * khi Manager duyet mot yeu cau truoc do bi tam giu. {@code chargeAmount} la so tien thuc su
+     * duoc ghi nhan la da thu (collectedAmount neu co, nguoc lai la computedAmount/amountDue).
+     */
+    private CheckOutResponse finalizeCheckout(ParkingSession session, Gate exitGate, Reservation reservation,
+            String licensePlateOut, String exitImageUrl, boolean lostTicket, String requestedPaymentMethod,
+            LocalDateTime exitTime, long minutes, boolean overstay, BigDecimal totalFee, BigDecimal lostTicketFee,
+            boolean plateMismatch, BigDecimal depositAlreadyPaid, BigDecimal alreadySettledOnline,
+            List<Payment> onlineFeePayments, List<Payment> onlineExtensionPayments, BigDecimal amountDue,
+            BigDecimal collectedAmountOverride) {
+
+        session.setLicensePlateOut(licensePlateOut);
+        session.setExitImageUrl(exitImageUrl);
         session.setExitGate(exitGate);
         session.setExitTime(exitTime);
         session.setStatus("Completed");
@@ -298,42 +460,17 @@ public class SessionService {
             parkingCardRepository.save(card);
         }
 
-        // Deposit — subtract what was already collected at booking time (item 4/Phase 4).
-        BigDecimal depositAlreadyPaid = (reservation != null && "Paid".equals(reservation.getDepositStatus())
-                && reservation.getDepositAmount() != null) ? reservation.getDepositAmount() : BigDecimal.ZERO;
-
-        // Settlement — sum ALL Success payments already collected online for this session/
-        // reservation (Fee-purpose QR/VNPay paid before the gate, Extension-purpose paid at
-        // extend-time) instead of findFirst(), so neither is missed nor double-charged at the gate.
-        List<Payment> onlineFeePayments = paymentRepository.findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(
-                session.getSessionId(), "Success", List.of("Fee"));
-        List<Payment> onlineExtensionPayments = reservation != null
-                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
-                        reservation.getReservationId(), "Success", List.of("Extension"))
-                : List.of();
-        BigDecimal alreadySettledOnline = BigDecimal.ZERO;
-        for (Payment p : onlineFeePayments) {
-            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
-            if (p.getReservation() == null && reservation != null) {
-                p.setReservation(reservation);
-                paymentRepository.save(p);
-            }
-        }
-        for (Payment p : onlineExtensionPayments) {
-            alreadySettledOnline = alreadySettledOnline.add(p.getAmount());
-        }
-
-        BigDecimal amountDue = totalFee.subtract(depositAlreadyPaid).subtract(alreadySettledOnline).max(BigDecimal.ZERO);
+        BigDecimal chargeAmount = collectedAmountOverride != null ? collectedAmountOverride : amountDue;
 
         String paymentMethod;
         BigDecimal settledAmount;
-        if (amountDue.compareTo(BigDecimal.ZERO) > 0) {
-            paymentMethod = request.getPaymentMethod() == null ? "Cash" : request.getPaymentMethod();
-            settledAmount = amountDue;
+        if (chargeAmount.compareTo(BigDecimal.ZERO) > 0) {
+            paymentMethod = requestedPaymentMethod == null ? "Cash" : requestedPaymentMethod;
+            settledAmount = chargeAmount;
             paymentRepository.save(Payment.builder()
                     .session(session)
                     .reservation(reservation)
-                    .amount(amountDue)
+                    .amount(chargeAmount)
                     .paymentMethod(paymentMethod)
                     .paymentTime(exitTime)
                     .paymentStatus("Success")
@@ -352,7 +489,7 @@ public class SessionService {
                 .action("STAFF_CHECK_OUT")
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
-                .detail("Staff checked out vehicle: " + request.getLicensePlate()
+                .detail("Staff checked out vehicle: " + licensePlateOut
                         + " | " + minutes + " min | total=" + totalFee + " deposit=" + depositAlreadyPaid
                         + " onlinePrePaid=" + alreadySettledOnline + " collectedNow=" + settledAmount
                         + " VND | " + paymentMethod
@@ -366,7 +503,7 @@ public class SessionService {
         return CheckOutResponse.builder()
                 .sessionId(session.getSessionId())
                 .licensePlateIn(session.getLicensePlateIn())
-                .licensePlateOut(request.getLicensePlate())
+                .licensePlateOut(licensePlateOut)
                 .plateMismatch(plateMismatch)
                 .entryTime(session.getEntryTime())
                 .exitTime(exitTime)
@@ -380,6 +517,7 @@ public class SessionService {
                 .slotFreed(slotFreed)
                 .cardReturned(cardReturned)
                 .isOverstay(overstay)
+                .pendingApproval(false)
                 .build();
     }
 

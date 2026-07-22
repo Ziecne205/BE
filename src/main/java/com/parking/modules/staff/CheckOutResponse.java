@@ -27,4 +27,9 @@ public class CheckOutResponse {
     private String slotFreed;
     private boolean cardReturned;
     private boolean isOverstay;
+
+    /** true khi collectedAmount lech qua tolerance — checkout CHUA hoan tat, cho Manager duyet. */
+    private boolean pendingApproval;
+    /** ID cua CheckoutApprovalRequest da tao, chi co gia tri khi pendingApproval=true. */
+    private Long approvalRequestId;
 }
