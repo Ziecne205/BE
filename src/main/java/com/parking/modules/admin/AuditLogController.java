@@ -57,6 +57,23 @@ public class AuditLogController {
         return ApiResponse.ok(toResponseList(auditLogService.findByDateRange(from, to)));
     }
 
+    @GetMapping("/retention")
+    @Operation(summary = "Tinh trang luu tru nhat ky (so ngay giu, tong so dong, so dong qua han)",
+            description = "So ngay giu chinh qua SystemConfig key AUDIT_LOG_RETENTION_DAYS (mac dinh 180, "
+                    + "toi thieu 30; dat 0 de giu vinh vien).")
+    public ApiResponse<AuditLogRetentionResponse> retentionStatus() {
+        return ApiResponse.ok(auditLogService.getRetentionStatus());
+    }
+
+    // Don thu cong: dung khi khong muon doi den ca dem (vd vua ha AUDIT_LOG_RETENTION_DAYS xuong).
+    // Chi xoa phan DA QUA HAN theo cau hinh — khong nhan tham so ngay tuy y de khong the xoa nham
+    // ca lich su con trong han.
+    @PostMapping("/purge")
+    @Operation(summary = "Don ngay cac dong nhat ky da qua han luu tru")
+    public ApiResponse<Long> purge() {
+        return ApiResponse.ok("Da don nhat ky qua han", auditLogService.purgeExpiredLogs());
+    }
+
     private List<AuditLogResponse> toResponseList(List<AuditLog> logs) {
         return logs.stream().map(AuditLogResponse::from).collect(Collectors.toList());
     }

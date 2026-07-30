@@ -125,7 +125,7 @@ separate, unaffected set.*
 | Method | Path | Request Body / Params | Description |
 |---|---|---|---|
 | **GET** | `/api/driver/reservations/quote` | `?vehicleTypeId=&entryTime=&exitTime=` | Estimated fee + deposit for a time window — no booking created |
-| **POST** | `/api/driver/reservations` | `{ vehicleTypeId, licensePlate, expectedEntryTime, expectedExitTime }` | Create booking, status `Pending` |
+| **POST** | `/api/driver/reservations` | `{ vehicleTypeId, licensePlate, expectedEntryTime, expectedExitTime }` | Create booking, status `Pending`. **Driver/Admin only** — Manager can no longer book on a customer's behalf here (removed; the old FE modal never actually passed a target `userId` to the backend, so it only ever booked under the Manager's own account) |
 | **GET** | `/api/driver/reservations/my` | – | Current user's bookings |
 | **PATCH** | `/api/driver/reservations/{id}/cancel` | – | Cancel own booking |
 | **POST** | `/api/driver/reservations/{id}/confirm-deposit`| – | Mark deposit Paid |
@@ -155,4 +155,22 @@ separate, unaffected set.*
 | **GET** | `/api/admin/system-configs` | – | List generic key-value configs |
 | **POST** | `/api/admin/system-configs` | `{ configKey, configValue, description? }` | Create config |
 | **GET** | `/api/admin/audit-logs` | `?action=`, `?entityName=`, `?userId=`, `?from=&to=` | Filter audit logs |
+| **GET** | `/api/admin/audit-logs/retention` | – | Retention status: `{ retentionDays, cutoff, totalLogs, expiredLogs }` |
+| **POST** | `/api/admin/audit-logs/purge` | – | Delete logs past retention now (returns deleted count) |
 | **GET** | `/api/admin/dashboard` | – | Master Admin Dashboard |
+
+### Admin safety rules (409 `CONFLICT` on violation)
+
+| Rule | Error code | Why |
+|---|---|---|
+| Cannot change **your own** account status | `SELF_ACTION_FORBIDDEN` | Self-lockout: no one can unlock you except a direct DB edit |
+| Cannot lock or reset the password of **another Admin** | `PEER_ADMIN_FORBIDDEN` | A compromised Admin must not be able to take over the other Admins; Admins self-recover via `/api/auth/staff/forgot-password` |
+| Cannot remove permissions from the **`Admin` role** | `PROTECTED_ROLE` | Same lockout at the RBAC level (adding permissions is still allowed) |
+
+Locking an account (`status != "Active"`) also **revokes every JWT already issued** to it and
+**cancels its `Pending`/`Confirmed` bookings with a deposit refund** (`CheckedIn` bookings are left
+alone — the car is physically inside). Changing a password (by Admin or via the self-service OTP
+flow) revokes previously issued JWTs too, so other devices are signed out immediately.
+
+Audit-log retention is configured through `SystemConfig` key `AUDIT_LOG_RETENTION_DAYS`
+(default `180`, minimum `30`, set `0` to keep forever); a nightly job at 03:15 purges expired rows.

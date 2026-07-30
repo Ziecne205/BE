@@ -37,8 +37,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             String username = jwtService.extractUsername(token);
 
             if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
+                // Doc lai User tu DB moi request: trang thai tai khoan (Active/Inactive/Banned) va moc
+                // thu hoi phien nam o DB, khong nam trong token. Khong doc lai thi Admin khoa tai khoan
+                // xong, token cu tren may khach van dung duoc den khi het han (8h).
                 UserDetails userDetails = userDetailsService.loadUserByUsername(username);
-                if (jwtService.isTokenValid(token, userDetails)) {
+                if (userDetails.isEnabled() && jwtService.isTokenValid(token, userDetails)) {
                     UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails,
                             null, userDetails.getAuthorities());
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
