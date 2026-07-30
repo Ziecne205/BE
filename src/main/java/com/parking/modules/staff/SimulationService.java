@@ -3,6 +3,7 @@ package com.parking.modules.staff;
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.PricingService;
+import com.parking.common.util.LicensePlateNormalizer;
 import com.parking.entity.Gate;
 import com.parking.entity.ParkingSession;
 import com.parking.entity.ParkingSlot;
@@ -76,19 +77,21 @@ public class SimulationService {
         if (Math.random() * 100 < failureRate) {
             throw new BusinessRuleException("Camera doc bien so that bai — nhap tay");
         }
-        ParkingSession s = sessionRepository.findFirstByLicensePlateInAndStatusIn(plate, OPEN_STATUSES)
+        String normalizedPlate = LicensePlateNormalizer.normalize(plate);
+        ParkingSession s = sessionRepository.findFirstByLicensePlateInAndStatusIn(normalizedPlate, OPEN_STATUSES)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        "Khong tim thay phien dang mo cho bien so: " + plate));
+                        "Khong tim thay phien dang mo cho bien so: " + normalizedPlate));
 
         LocalDateTime now = LocalDateTime.now();
         BigDecimal fee = pricingService.calculateFee(s.getVehicleType().getVehicleTypeId(), s.getEntryTime(), now);
         double hours = Math.ceil(Duration.between(s.getEntryTime(), now).toMinutes() / 60.0);
 
-        return new SimulationDtos.ExitScanResult(String.valueOf(s.getSessionId()), plate,
+        return new SimulationDtos.ExitScanResult(String.valueOf(s.getSessionId()), normalizedPlate,
                 s.getEntryTime().toString(), hours, fee, false, List.of("Cash", "QR"));
     }
 
     public SimulationDtos.ForceCheckinResult forceCheckin(String plate) {
+        plate = LicensePlateNormalizer.normalize(plate);
         VehicleType vt = vehicleTypeRepository.findById(defaultVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
         Gate gate = entryGate();
@@ -117,8 +120,9 @@ public class SimulationService {
         slotRepository.save(slot);
 
         boolean matched = false;
-        if (plate != null && !plate.isBlank()) {
-            var opt = sessionRepository.findFirstByLicensePlateInAndStatusIn(plate, OPEN_STATUSES);
+        String normalizedPlate = LicensePlateNormalizer.normalize(plate);
+        if (normalizedPlate != null) {
+            var opt = sessionRepository.findFirstByLicensePlateInAndStatusIn(normalizedPlate, OPEN_STATUSES);
             if (opt.isPresent()) {
                 ParkingSession s = opt.get();
                 s.setActualSlot(slot);
