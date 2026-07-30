@@ -125,7 +125,7 @@ separate, unaffected set.*
 | Method | Path | Request Body / Params | Description |
 |---|---|---|---|
 | **GET** | `/api/driver/reservations/quote` | `?vehicleTypeId=&entryTime=&exitTime=` | Estimated fee + deposit for a time window — no booking created |
-| **POST** | `/api/driver/reservations` | `{ vehicleTypeId, licensePlate, expectedEntryTime, expectedExitTime }` | Create booking, status `Pending` |
+| **POST** | `/api/driver/reservations` | `{ vehicleTypeId, licensePlate, expectedEntryTime, expectedExitTime }` | Create booking, status `Pending`. **Driver/Admin only** — Manager can no longer book on a customer's behalf here (removed; the old FE modal never actually passed a target `userId` to the backend, so it only ever booked under the Manager's own account) |
 | **GET** | `/api/driver/reservations/my` | – | Current user's bookings |
 | **PATCH** | `/api/driver/reservations/{id}/cancel` | – | Cancel own booking |
 | **POST** | `/api/driver/reservations/{id}/confirm-deposit`| – | Mark deposit Paid |

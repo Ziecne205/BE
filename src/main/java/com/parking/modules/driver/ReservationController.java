@@ -23,7 +23,11 @@ public class ReservationController {
 
     private final ReservationService reservationService;
 
+    // Chi Driver (va Admin ho tro/test) duoc tao booking. Manager KHONG con duoc "dat cho ho" nua —
+    // tinh nang nay bi bo vi khong co userId thuc su duoc truyen (booking luon tao duoi ten Manager
+    // dang dang nhap, khong phai khach hang) va "override" vuot quota o FE khong he duoc BE ho tro.
     @PostMapping
+    @PreAuthorize("hasAnyRole('DRIVER', 'ADMIN')")
     public ApiResponse<ReservationDTO> create(@Valid @RequestBody ReservationRequest request, Authentication auth) {
         return ApiResponse.ok("Tao booking thanh cong, vui long thanh toan coc de xac nhan",
                 ReservationDTO.from(reservationService.create(request, auth.getName())));
