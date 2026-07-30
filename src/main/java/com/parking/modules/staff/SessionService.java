@@ -3,6 +3,7 @@ package com.parking.modules.staff;
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
 import com.parking.common.service.PricingService;
+import com.parking.common.util.LicensePlateNormalizer;
 import com.parking.entity.*;
 import com.parking.modules.driver.PayosLinkResponse;
 import com.parking.modules.driver.PayosService;
@@ -73,6 +74,7 @@ public class SessionService {
     // neu khong 2 walk-in dong thoi co the cung vuot suc chua (phantom read tren Sessions/Reservations).
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public CheckInResponse checkIn(CheckInRequest request) {
+        request.setLicensePlate(LicensePlateNormalizer.normalize(request.getLicensePlate()));
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
         Gate entryGate = gateRepository.findById(request.getEntryGateId())
@@ -200,12 +202,13 @@ public class SessionService {
             throw new BusinessRuleException("Chi co the force check-in phien dang mo (Admitted/Parked)");
         }
 
+        String normalizedPlate = LicensePlateNormalizer.normalize(request.getActualPlate());
         String previousPlate = session.getLicensePlateIn();
-        session.setLicensePlateIn(request.getActualPlate());
+        session.setLicensePlateIn(normalizedPlate);
         session.setIsForceCheckIn(true);
 
         if (session.getReservation() != null) {
-            session.getReservation().setLicensePlate(request.getActualPlate());
+            session.getReservation().setLicensePlate(normalizedPlate);
             reservationRepository.save(session.getReservation());
         }
 
@@ -217,7 +220,7 @@ public class SessionService {
                 .entityName("ParkingSession")
                 .entityId(String.valueOf(session.getSessionId()))
                 .detail("Staff force checked-in vehicle: plate changed from " + previousPlate
-                        + " to " + request.getActualPlate()
+                        + " to " + normalizedPlate
                         + (request.getReason() != null && !request.getReason().isBlank()
                                 ? " | reason: " + request.getReason()
                                 : ""))
@@ -237,6 +240,7 @@ public class SessionService {
 
     @Transactional
     public CheckOutResponse checkOut(CheckOutRequest request, String staffUsername) {
+        request.setLicensePlate(LicensePlateNormalizer.normalize(request.getLicensePlate()));
         ParkingSession session = sessionRepository
                 .findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay phien dang mo cho bien so nay"));
@@ -582,8 +586,9 @@ public class SessionService {
     private record FeeQuote(Long sessionId, String plate, BigDecimal fee) {}
 
     public ActiveSessionDto searchActiveByPlate(String licensePlate) {
+        String normalizedPlate = LicensePlateNormalizer.normalize(licensePlate);
         ParkingSession session = sessionRepository
-                .findFirstByLicensePlateInAndStatusIn(licensePlate, OPEN_SESSION_STATUSES)
+                .findFirstByLicensePlateInAndStatusIn(normalizedPlate, OPEN_SESSION_STATUSES)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Khong tim thay phien dang mo cho bien so: " + licensePlate));
         return toActiveSessionDto(session, LocalDateTime.now());

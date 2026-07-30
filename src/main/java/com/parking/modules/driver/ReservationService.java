@@ -2,6 +2,7 @@ package com.parking.modules.driver;
 
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.common.exception.ResourceNotFoundException;
+import com.parking.common.util.LicensePlateNormalizer;
 import com.parking.entity.*;
 import com.parking.repository.*;
 import com.parking.common.service.PricingService;
@@ -47,6 +48,10 @@ public class ReservationService {
     // luu luong thap nen chi phi khoa la chap nhan duoc; danh doi de giu dung bat bien suc chua.
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public Reservation create(ReservationRequest request, String username) {
+        request.setLicensePlate(LicensePlateNormalizer.normalize(request.getLicensePlate()));
+        if (request.getLicensePlate() == null) {
+            throw new BusinessRuleException("Bien so khong hop le");
+        }
         if (!request.getExpectedExitTime().isAfter(request.getExpectedEntryTime())) {
             throw new BusinessRuleException("Gio ra phai sau gio vao");
         }
