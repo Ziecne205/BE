@@ -42,6 +42,10 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     @CountQuery("{ 'user.$id': ?0, 'status': { $in: ?1 } }")
     long countByUser_UserIdAndStatusIn(Long userId, List<String> statuses);
 
+    /** Booking cua mot khach dang o cac trang thai cho truoc — dung khi Admin khoa/ban tai khoan. */
+    @Query("{ 'user.$id': ?0, 'status': { $in: ?1 } }")
+    List<Reservation> findByUser_UserIdAndStatusIn(Long userId, List<String> statuses);
+
     @Query("{ 'licensePlate': ?0, 'status': { $in: ?1 }, 'expectedExitTime': { $gt: ?2 }, 'expectedEntryTime': { $lt: ?3 } }")
     List<Reservation> findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
             String licensePlate, List<String> statuses, LocalDateTime start, LocalDateTime end);

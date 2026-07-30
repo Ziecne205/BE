@@ -3,6 +3,8 @@ package com.parking.entity;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.*;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.IndexDirection;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -35,13 +37,19 @@ public class AuditLog {
         return user != null ? user.getUsername() : null;
     }
 
+    // Ba truong duoi day la dieu kien loc cua toan bo man Nhat ky he thong. Khong co index, moi
+    // lan loc la mot COLLSCAN tren bang log lon nhat he thong (nghin dong/ngay).
+    @Indexed
     private String action;
 
+    @Indexed
     private String entityName;
 
     private String entityId;
 
     private String detail;
 
+    /** Index giam dan: man mac dinh sort createdAt DESC + job don log cu quet theo khoang thoi gian. */
+    @Indexed(direction = IndexDirection.DESCENDING)
     private LocalDateTime createdAt;
 }

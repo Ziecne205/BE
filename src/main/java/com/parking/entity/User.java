@@ -50,4 +50,14 @@ public class User {
 
     @Builder.Default
     private Boolean blacklisted = false;
+
+    /**
+     * Moc thu hoi phien: MOI JWT phat hanh TRUOC thoi diem nay deu bi tu choi
+     * (xem {@link com.parking.config.JwtService#isTokenValid}). JWT la stateless nen khong the
+     * "xoa" token da phat hanh — day moc nay len la cach duy nhat de dang xuat tuc thoi cac
+     * thiet bi khac. Duoc day len khi: doi/reset mat khau (tu phuc vu hoac do Admin), va khi
+     * tai khoan bi khoa/ban.
+     */
+    @JsonIgnore
+    private LocalDateTime sessionsValidFrom;
 }

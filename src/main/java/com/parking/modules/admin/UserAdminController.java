@@ -39,6 +39,8 @@ public class UserAdminController {
         return ApiResponse.ok(userAdminService.findById(id));
     }
 
+    // Khoa tai khoan = dang xuat tuc thoi moi thiet bi + huy booking chua dien ra. Khong ap dung
+    // duoc cho chinh minh (self-lockout) hay cho Admin khac (quyen ngang cap) — xem UserAdminService.
     @PatchMapping("/{id}/status")
     public ApiResponse<User> updateStatus(@PathVariable Long id, @Valid @RequestBody UserStatusRequest request, Authentication auth) {
         return ApiResponse.ok("Cap nhat trang thai thanh cong",
@@ -48,6 +50,6 @@ public class UserAdminController {
     @PatchMapping("/{id}/reset-password")
     public ApiResponse<Void> resetPassword(@PathVariable Long id, @Valid @RequestBody ResetPasswordRequest request, Authentication auth) {
         userAdminService.resetPassword(id, request.getNewPassword(), auth.getName());
-        return ApiResponse.ok("Da reset mat khau", null);
+        return ApiResponse.ok("Da reset mat khau. Moi phien dang nhap cu cua tai khoan nay da bi thu hoi.", null);
     }
 }

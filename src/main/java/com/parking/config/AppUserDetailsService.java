@@ -26,11 +26,15 @@ public class AppUserDetailsService implements UserDetailsService {
         User user = userRepository.findByUsernameOrEmailOrPhone(loginId).stream().findFirst()
                 .orElseThrow(() -> new UsernameNotFoundException("Khong tim thay user: " + loginId));
 
-        return org.springframework.security.core.userdetails.User.builder()
-                .username(user.getUsername())
-                .password(user.getPasswordHash())
-                .disabled(!"Active".equals(user.getStatus()))
-                .authorities(List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getRoleName().toUpperCase())))
-                .build();
+        // Tra ve AppUserPrincipal (thay cho User.builder() mac dinh) de JwtAuthFilter con biet
+        // userId/role/sessionsValidFrom — xem AppUserPrincipal.
+        return new AppUserPrincipal(
+                user.getUsername(),
+                user.getPasswordHash(),
+                "Active".equals(user.getStatus()),
+                List.of(new SimpleGrantedAuthority("ROLE_" + user.getRole().getRoleName().toUpperCase())),
+                user.getUserId(),
+                user.getRole().getRoleName(),
+                user.getSessionsValidFrom());
     }
 }

@@ -15,4 +15,10 @@ public interface AuditLogRepository extends MongoRepository<AuditLog, Long> {
     List<AuditLog> findByUser_UserId(Long userId);
 
     List<AuditLog> findByCreatedAtBetween(LocalDateTime from, LocalDateTime to);
+
+    /** So log da qua han luu tru — de bao cao truoc khi don. */
+    long countByCreatedAtBefore(LocalDateTime cutoff);
+
+    /** Xoa log cu hon moc (retention). Tra ve so document da xoa. */
+    long deleteByCreatedAtBefore(LocalDateTime cutoff);
 }

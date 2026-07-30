@@ -158,6 +158,9 @@ public class AuthService {
         }
 
         user.setPasswordHash(passwordEncoder.encode(newPassword));
+        // Doi mat khau = thu hoi moi JWT da phat hanh truoc do: neu khong, thiet bi khac dang giu
+        // token cu (toi 8h) van dung app binh thuong du mat khau da doi (xem User.sessionsValidFrom).
+        user.setSessionsValidFrom(LocalDateTime.now());
         user.setUpdatedAt(LocalDateTime.now());
         userRepository.save(user);
 
