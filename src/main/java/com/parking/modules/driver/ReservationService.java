@@ -11,7 +11,6 @@ import com.parking.modules.manager.FeeConfigResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -46,10 +45,14 @@ public class ReservationService {
     private final PricingService pricingService;
     private final PlatformTransactionManager txManager;
 
-    // SERIALIZABLE de dam bao kiem tra quota (checkQuota) va insert booking la nguyen tu:
-    // tranh 2 request dong thoi cung vuot qua gioi han quota (phantom read). Bai 1 toa nha,
-    // luu luong thap nen chi phi khoa la chap nhan duoc; danh doi de giu dung bat bien suc chua.
-    @Transactional(isolation = Isolation.SERIALIZABLE)
+    // Truoc day dung @Transactional(isolation = SERIALIZABLE) de kiem tra quota (checkQuota) va
+    // insert booking nguyen tu, tranh 2 request dong thoi cung vuot qua gioi han quota. BO isolation
+    // nay: MongoTransactionManager khong that su ho tro SERIALIZABLE kieu SQL, va bi loi khi
+    // ROLLBACK (vd trung bien so / het quota -> throw de huy giao dich), khien Spring boc loi
+    // rollback thanh exception khac roi lo ra ngoai thanh 500 thay vi thong bao ro rang (xem giai
+    // thich chi tiet o SessionService.checkIn, cung bug). MongoDB transaction mac dinh van nguyen
+    // tu; du an bai 1 toa nha, luu luong thap nen danh doi nay chap nhan duoc.
+    @Transactional
     public Reservation create(ReservationRequest request, String username) {
         request.setLicensePlate(LicensePlateNormalizer.normalize(request.getLicensePlate()));
         if (request.getLicensePlate() == null) {

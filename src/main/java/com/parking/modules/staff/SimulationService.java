@@ -13,6 +13,7 @@ import com.parking.repository.ParkingSessionRepository;
 import com.parking.repository.ParkingSlotRepository;
 import com.parking.repository.VehicleTypeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,6 +34,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class SimulationService {
 
     private final SessionService sessionService;
@@ -69,7 +71,17 @@ public class SimulationService {
             return new SimulationDtos.EntryScanResult(true, String.valueOf(r.getSessionId()),
                     r.isReserved(), r.getSuggestedSlotCode(), null, "Da cho vao bai");
         } catch (BusinessRuleException e) {
-            return new SimulationDtos.EntryScanResult(false, null, null, null, "FULL", e.getMessage());
+            return new SimulationDtos.EntryScanResult(false, null, null, null, e.getErrorCode(), e.getMessage());
+        } catch (ResourceNotFoundException e) {
+            return new SimulationDtos.EntryScanResult(false, null, null, null, "NOT_FOUND", e.getMessage());
+        } catch (RuntimeException e) {
+            // Man hinh mo phong cong khong duoc phep "vo" ra loi he thong tho — luon tra ve mot ket
+            // qua co cau truc de FE hien thi thong bao, giong het cac nhanh that bai co chu y khac
+            // o tren (SCAN_FAILED/FULL). Chi tiet loi that su duoc ghi log server-side (khong day
+            // ra client) de tranh lo thong tin noi bo.
+            log.error("Loi khong mong doi khi mo phong quet cong vao (bien so={})", plate, e);
+            return new SimulationDtos.EntryScanResult(false, null, null, null,
+                    "SCAN_ERROR", "Co loi xay ra khi xu ly, vui long thu lai");
         }
     }
 
@@ -98,7 +110,7 @@ public class SimulationService {
         // them lan nua (xem SessionService.checkIn ap dung cung 1 guard cho luong binh thuong).
         if (sessionRepository.findFirstByLicensePlateInAndStatusIn(plate, OPEN_STATUSES).isPresent()) {
             throw new BusinessRuleException(
-                    "Bien so " + plate + " da co phien gui xe dang mo", "DUPLICATE_OPEN_SESSION");
+                    "Xe bien so " + plate + " da co trong phien do xe, vui long kiem tra lai", "DUPLICATE_OPEN_SESSION");
         }
 
         VehicleType vt = vehicleTypeRepository.findById(defaultVehicleTypeId())
