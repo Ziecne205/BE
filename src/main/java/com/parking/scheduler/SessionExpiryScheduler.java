@@ -78,16 +78,17 @@ public class SessionExpiryScheduler {
     private final PayosService payosService;
 
     /**
-     * Moi 1 phut: phien "Admitted" da qua moc giu o goi y (suggestedSlotHoldExpiresAt = gio vao +
-     * 5 phut, dat luc check-in) -> tu dong chuyen sang "Parked" va gan actualSlot = suggestedSlot.
+     * Moi 5 giay: phien "Admitted" da qua moc giu o goi y (suggestedSlotHoldExpiresAt = gio vao +
+     * 10 giay, dat luc check-in) -> tu dong chuyen sang "Parked" va gan actualSlot = suggestedSlot.
      * Demo/console khong co camera thuc de bao "xe da do vao o" (binh thuong viec nay do
-     * SimulationService.cameraSlotOccupied dam nhan), nen sau 5 phut he thong tu suy ra xe da do
-     * vao dung o goi y luc check-in — tranh phien bi "ket" mai o trang thai cho do.
+     * SimulationService.cameraSlotOccupied dam nhan), nen sau it giay he thong tu suy ra xe da do
+     * vao dung o goi y luc check-in — tranh phien bi "ket" mai o trang thai cho do. Tan suat quet
+     * (5s) can nhanh hon nguong (10s) de do tre khong lech qua xa moc thuc te.
      * Neu o goi y khong con Available (vd da bi chiem boi xe khac trong luc cho) thi BO QUA, de
      * Staff xu ly thu cong qua man Sua o thuc te; job flagStaleAdmittedSessions (15 phut) se bao
      * Loiterer neu van khong ai xu ly.
      */
-    @Scheduled(fixedDelay = 60 * 1000)
+    @Scheduled(fixedDelay = 5 * 1000)
     public void autoParkAdmittedSessions() {
         LocalDateTime now = LocalDateTime.now();
         List<ParkingSession> due = sessionRepository.findByStatusAndSuggestedSlotHoldExpiresAtBefore("Admitted", now);
