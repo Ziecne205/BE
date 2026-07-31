@@ -14,7 +14,6 @@ public class FeeConfigController {
     private final FeeConfigService feeConfigService;
 
     @GetMapping
-    @PreAuthorize("hasRole('MANAGER')")
     public ApiResponse<FeeConfigResponse> getFeeConfig() {
         return ApiResponse.ok(feeConfigService.getFeeConfig());
     }

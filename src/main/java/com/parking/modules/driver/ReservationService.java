@@ -289,12 +289,13 @@ public class ReservationService {
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking không thể hủy ở trạng thái hiện tại");
         }
-        // Chinh sach: phai doi it nhat 10 phut sau khi dat moi duoc huy.
+        // Chinh sach: phai doi it nhat cancelWindowMinutes (lay tu FeeConfig) sau khi dat moi duoc huy.
+        int cancelWindowMinutes = feeConfigService.getFeeConfig().getCancelWindowMinutes();
         long minutesSinceCreation = ChronoUnit.MINUTES.between(
                 reservation.getCreatedAt(), LocalDateTime.now());
-        if (minutesSinceCreation < 10) {
+        if (minutesSinceCreation < cancelWindowMinutes) {
             throw new BusinessRuleException(
-                    "Không thể hủy booking trong vòng 10 phút đầu sau khi đặt chỗ",
+                    "Không thể hủy booking trong vòng " + cancelWindowMinutes + " phút đầu sau khi đặt chỗ",
                     "CANCEL_TOO_EARLY");
         }
         return cancelWithRefund(reservation, "Cancelled", true);

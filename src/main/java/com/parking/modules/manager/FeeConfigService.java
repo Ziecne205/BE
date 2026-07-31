@@ -30,6 +30,7 @@ public class FeeConfigService {
                 .noShowGraceMinutes(getIntegerValue("NO_SHOW_GRACE_MINUTES", 15))
                 .blacklistThreshold(getIntegerValue("BLACKLIST_THRESHOLD", 3))
                 .depositPaymentWindowMinutes(getIntegerValue("DEPOSIT_PAYMENT_WINDOW_MINUTES", 3))
+                .cancelWindowMinutes(getIntegerValue("CANCEL_WINDOW_MINUTES", 10))
                 .cashToleranceVnd(getBigDecimalValue("CASH_TOLERANCE_VND", BigDecimal.ZERO))
                 .build();
     }
@@ -49,6 +50,7 @@ public class FeeConfigService {
         saveConfigIfPresent("BLACKLIST_THRESHOLD", request.getBlacklistThreshold());
         // Truoc day getFeeConfig doc key nay nhung updateFeeConfig khong luu -> khong the chinh qua API.
         saveConfigIfPresent("DEPOSIT_PAYMENT_WINDOW_MINUTES", request.getDepositPaymentWindowMinutes());
+        saveConfigIfPresent("CANCEL_WINDOW_MINUTES", request.getCancelWindowMinutes());
         saveConfigIfPresent("CASH_TOLERANCE_VND", request.getCashToleranceVnd());
 
         return getFeeConfig();
