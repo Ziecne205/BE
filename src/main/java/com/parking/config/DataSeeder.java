@@ -10,7 +10,9 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Nap du lieu nen khi database trong (Mongo Atlas moi tao khong co san du lieu nhu ParkingDB cu).
@@ -34,12 +36,19 @@ public class DataSeeder implements CommandLineRunner {
     private final FloorRepository floorRepository;
     private final GateRepository gateRepository;
     private final ParkingSlotRepository parkingSlotRepository;
+    private final PermissionRepository permissionRepository;
 
     @Override
     public void run(String... args) {
-        if (roleRepository.count() > 0) {
-            return; // da co du lieu -> khong seed lai
+        if (roleRepository.count() == 0) {
+            seedCore();
         }
+        if (permissionRepository.count() == 0) {
+            seedPermissions();
+        }
+    }
+
+    private void seedCore() {
         log.info("Database trong -> bat dau seed du lieu nen...");
 
         // 1) Roles
@@ -91,6 +100,71 @@ public class DataSeeder implements CommandLineRunner {
         log.info("Seed xong: {} role, {} user, 1 loai xe, 3 tang, 6 cong, {} o do.",
                 roleRepository.count(), userRepository.count(), slots.size());
         log.info("Tai khoan demo (mat khau 123456): admin@parking.vn / manager@parking.vn / staff@parking.vn / driver@parking.vn");
+    }
+
+    /**
+     * Nap catalog quyen han (Permissions) va gan mac dinh cho tung role.
+     * Tach rieng khoi seedCore() vi du lieu Role/User co the da ton tai tu truoc
+     * (vd Mongo Atlas cu chua co Permissions) -> van phai chay de bo sung du lieu con thieu.
+     */
+    private void seedPermissions() {
+        log.info("Permissions collection trong -> bat dau seed catalog quyen han...");
+
+        Permission dashboardView = savePermission("dashboard.view", "Xem trung tam giam sat");
+        Permission usersManage = savePermission("users.manage", "Quan ly tai khoan nguoi dung");
+        Permission rbacManage = savePermission("rbac.manage", "Quan ly phan quyen vai tro");
+        Permission systemConfigManage = savePermission("system_config.manage", "Quan ly cau hinh he thong");
+        Permission auditLogView = savePermission("audit_log.view", "Xem nhat ky he thong");
+
+        Permission floorsManage = savePermission("floors.manage", "Quan ly tang va o do");
+        Permission gatesManage = savePermission("gates.manage", "Quan ly cong ra vao");
+        Permission pricingManage = savePermission("pricing.manage", "Quan ly bang gia");
+        Permission vehicleTypesManage = savePermission("vehicle_types.manage", "Quan ly loai xe");
+        Permission quotasManage = savePermission("quotas.manage", "Quan ly han muc dat cho");
+        Permission feeConfigManage = savePermission("fee_config.manage", "Quan ly cau hinh phi");
+        Permission reservationsManage = savePermission("reservations.manage", "Quan ly dat cho");
+        Permission incidentsManage = savePermission("incidents.manage", "Quan ly su co");
+        Permission paymentsManage = savePermission("payments.manage", "Quan ly thanh toan");
+        Permission reportsView = savePermission("reports.view", "Xem bao cao");
+
+        Permission checkinManage = savePermission("checkin.manage", "Thuc hien check-in");
+        Permission checkoutManage = savePermission("checkout.manage", "Thuc hien check-out");
+        Permission sessionsView = savePermission("sessions.view", "Xem phien do xe dang hoat dong");
+
+        Set<Permission> adminPermissions = new HashSet<>(List.of(
+                dashboardView, usersManage, rbacManage, systemConfigManage, auditLogView,
+                floorsManage, gatesManage, pricingManage, vehicleTypesManage, quotasManage,
+                feeConfigManage, reservationsManage, incidentsManage, paymentsManage, reportsView,
+                checkinManage, checkoutManage, sessionsView));
+
+        Set<Permission> managerPermissions = new HashSet<>(List.of(
+                dashboardView, floorsManage, gatesManage, pricingManage, vehicleTypesManage,
+                quotasManage, feeConfigManage, reservationsManage, incidentsManage, paymentsManage,
+                reportsView));
+
+        Set<Permission> staffPermissions = new HashSet<>(List.of(
+                checkinManage, checkoutManage, sessionsView, incidentsManage));
+
+        assignPermissionsToRole("Admin", adminPermissions);
+        assignPermissionsToRole("Manager", managerPermissions);
+        assignPermissionsToRole("Staff", staffPermissions);
+        // Driver: khong co quyen quan tri nao -> khong gan gi ca.
+
+        log.info("Seed xong: {} permission.", permissionRepository.count());
+    }
+
+    private Permission savePermission(String code, String description) {
+        return permissionRepository.save(Permission.builder()
+                .permissionCode(code)
+                .description(description)
+                .build());
+    }
+
+    private void assignPermissionsToRole(String roleName, Set<Permission> permissions) {
+        roleRepository.findByRoleName(roleName).ifPresent(role -> {
+            role.setPermissions(permissions);
+            roleRepository.save(role);
+        });
     }
 
     private Role role(String name, String desc) {
