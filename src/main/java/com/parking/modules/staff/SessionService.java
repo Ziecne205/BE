@@ -600,7 +600,14 @@ public class SessionService {
             if (fee == null) {
                 throw new BusinessRuleException("Chua co bang gia de tinh phi cho loai xe nay", "PRICING_NOT_CONFIGURED");
             }
-            return new FeeQuote(session.getSessionId(), session.getLicensePlateIn(), fee);
+            // QR phai thu DUNG so tien con lai (fee - coc da tra - da thanh toan online khac), khong
+            // phai tong phi tho — neu khong khach da dat coc se bi quet QR thu du dung phan coc.
+            BigDecimal amountDue = estimateAmountDue(session, fee, depositAlreadyPaid(session.getReservation()));
+            if (amountDue.compareTo(BigDecimal.ZERO) <= 0) {
+                throw new BusinessRuleException(
+                        "Da duoc thanh toan du qua coc/truoc do, khong can tao them QR", "ALREADY_SETTLED");
+            }
+            return new FeeQuote(session.getSessionId(), session.getLicensePlateIn(), amountDue);
         });
 
         // Pha 2 (KHONG giu tx): goi PayOS — khong ghim ket noi DB trong suot HTTP call.
@@ -640,6 +647,8 @@ public class SessionService {
     }
 
     private ActiveSessionDto toActiveSessionDto(ParkingSession s, LocalDateTime now) {
+        BigDecimal estimatedFee = estimateFee(s, now);
+        BigDecimal depositAlreadyPaid = depositAlreadyPaid(s.getReservation());
         return ActiveSessionDto.builder()
                 .sessionId(s.getSessionId())
                 .licensePlateIn(s.getLicensePlateIn())
@@ -652,9 +661,36 @@ public class SessionService {
                 .hasReservation(s.getReservation() != null)
                 .hasCard(s.getCard() != null)
                 .parkedMinutes(Duration.between(s.getEntryTime(), now).toMinutes())
-                .estimatedFee(estimateFee(s, now))
+                .estimatedFee(estimatedFee)
+                .depositAlreadyPaid(depositAlreadyPaid)
+                .amountDue(estimatedFee == null ? null : estimateAmountDue(s, estimatedFee, depositAlreadyPaid))
                 .isOverstayFlagged(Boolean.TRUE.equals(s.getIsOverstayFlagged()))
                 .build();
+    }
+
+    private BigDecimal depositAlreadyPaid(Reservation reservation) {
+        return (reservation != null && "Paid".equals(reservation.getDepositStatus())
+                && reservation.getDepositAmount() != null) ? reservation.getDepositAmount() : BigDecimal.ZERO;
+    }
+
+    /**
+     * Ban CHI-DOC cua phep tru coc/da-thanh-toan-online dung trong checkOut()/finalizeCheckout,
+     * dung cho man hinh "Phi tam tinh" hien thi TRUOC khi Staff bam check-out — de con so Staff
+     * nhin thay (va dien san vao o tien mat thu) da tru cong dung nhu luc chot don, tranh bat
+     * khach tra du phan da coc/da tra online truoc do. KHONG mutate gi (khac finalizeCheckout,
+     * cho nay khong gan lai Payment.reservation) vi day chi la uoc tinh, goi lai moi 5s khi poll.
+     */
+    private BigDecimal estimateAmountDue(ParkingSession s, BigDecimal estimatedFee, BigDecimal depositAlreadyPaid) {
+        Reservation reservation = s.getReservation();
+        BigDecimal onlineFee = paymentRepository
+                .findBySession_SessionIdAndPaymentStatusAndPaymentPurposeIn(s.getSessionId(), "Success", List.of("Fee"))
+                .stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal onlineExtension = reservation != null
+                ? paymentRepository.findByReservation_ReservationIdAndPaymentStatusAndPaymentPurposeIn(
+                                reservation.getReservationId(), "Success", List.of("Extension"))
+                        .stream().map(Payment::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add)
+                : BigDecimal.ZERO;
+        return estimatedFee.subtract(depositAlreadyPaid).subtract(onlineFee).subtract(onlineExtension).max(BigDecimal.ZERO);
     }
 
     /** Phi tam tinh cho phien dang mo (theo bang gia hien hanh, den thoi diem now). */
