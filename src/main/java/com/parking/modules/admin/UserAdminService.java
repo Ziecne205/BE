@@ -136,6 +136,17 @@ public class UserAdminService {
             throw new BusinessRuleException("Username da ton tai");
         }
 
+        // Endpoint dung chung cho Admin va Manager (@PreAuthorize hasAnyRole('ADMIN','MANAGER')).
+        // DTO chap nhan ca "Admin" nen phai tu kiem tra o day: CHI Admin moi duoc tao them Admin,
+        // Manager tao Admin se la leo thang dac quyen nghiem trong.
+        if (ROLE_ADMIN.equalsIgnoreCase(request.getRoleName())) {
+            User actor = requireActor(actorUsername);
+            if (actor.getRole() == null || !ROLE_ADMIN.equalsIgnoreCase(actor.getRole().getRoleName())) {
+                throw new BusinessRuleException(
+                        "Chi Admin moi duoc tao tai khoan Admin khac", "PEER_ADMIN_FORBIDDEN");
+            }
+        }
+
         Role role = roleRepository.findByRoleName(request.getRoleName())
                 .orElseThrow(() -> new BusinessRuleException("Role khong hop le: " + request.getRoleName()));
 
