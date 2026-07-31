@@ -289,14 +289,13 @@ public class ReservationService {
         if (!List.of("Pending", "Confirmed").contains(reservation.getStatus())) {
             throw new BusinessRuleException("Booking không thể hủy ở trạng thái hiện tại");
         }
-        // Cua so huy 3 gio CHI ap dung cho driver tu huy — khong ap cho scheduler (no-show /
-        // het han coc) hay cascade bao tri, vi nhung luong do co the cham booking sat/qua gio vao.
-        long hoursUntilEntry = ChronoUnit.HOURS.between(
-                LocalDateTime.now(), reservation.getExpectedEntryTime());
-        if (hoursUntilEntry < 3) {
+        // Chinh sach: phai doi it nhat 10 phut sau khi dat moi duoc huy.
+        long minutesSinceCreation = ChronoUnit.MINUTES.between(
+                reservation.getCreatedAt(), LocalDateTime.now());
+        if (minutesSinceCreation < 10) {
             throw new BusinessRuleException(
-                    "Không thể hủy booking trong vòng 3 giờ trước giờ vào",
-                    "CANCEL_TOO_LATE");
+                    "Không thể hủy booking trong vòng 10 phút đầu sau khi đặt chỗ",
+                    "CANCEL_TOO_EARLY");
         }
         return cancelWithRefund(reservation, "Cancelled", true);
     }
