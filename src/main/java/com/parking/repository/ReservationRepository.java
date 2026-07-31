@@ -49,4 +49,8 @@ public interface ReservationRepository extends MongoRepository<Reservation, UUID
     @Query("{ 'licensePlate': ?0, 'status': { $in: ?1 }, 'expectedExitTime': { $gt: ?2 }, 'expectedEntryTime': { $lt: ?3 } }")
     List<Reservation> findByLicensePlateAndStatusInAndExpectedExitTimeGreaterThanAndExpectedEntryTimeLessThan(
             String licensePlate, List<String> statuses, LocalDateTime start, LocalDateTime end);
+
+    /** Dat cho chua check-in (Pending/Confirmed), gan nhat truoc — cho man "Phien hoat dong" cua Staff. */
+    @Query(value = "{ 'status': { $in: ?0 } }", sort = "{ 'expectedEntryTime': 1 }")
+    List<Reservation> findByStatusInOrderByExpectedEntryTimeAsc(List<String> statuses);
 }

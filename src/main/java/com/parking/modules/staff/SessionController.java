@@ -42,6 +42,12 @@ public class SessionController {
         return ApiResponse.ok("Danh sach phien dang mo", sessionService.getActiveSessions());
     }
 
+    @GetMapping("/upcoming")
+    @Operation(summary = "Danh sach dat cho chua check-in (Pending/Confirmed), gan nhat truoc")
+    public ApiResponse<List<UpcomingReservationDto>> getUpcomingReservations() {
+        return ApiResponse.ok("Danh sach dat cho sap toi", sessionService.getUpcomingReservations());
+    }
+
     @GetMapping("/search")
     @Operation(summary = "Tim phien dang mo theo bien so (ho tro check-out)")
     public ApiResponse<ActiveSessionDto> searchByPlate(@RequestParam String licensePlate) {

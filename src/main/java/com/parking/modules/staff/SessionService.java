@@ -552,6 +552,30 @@ public class SessionService {
         return sessions.stream().map(s -> toActiveSessionDto(s, now)).toList();
     }
 
+    private static final List<String> UPCOMING_RESERVATION_STATUSES = List.of("Pending", "Confirmed");
+
+    /**
+     * Dat cho chua check-in (Pending/Confirmed), gan nhat truoc, de man "Phien hoat dong" cua
+     * Staff hien thi truoc xe nao se den va luc nao — bo sung cho getActiveSessions() (chi phien
+     * DA check-in thuc su). Khong loc theo ngay: hien toan bo booking outstanding, Staff tu xem
+     * gio vao du kien de biet cai nao la hom nay.
+     */
+    public List<UpcomingReservationDto> getUpcomingReservations() {
+        return reservationRepository.findByStatusInOrderByExpectedEntryTimeAsc(UPCOMING_RESERVATION_STATUSES)
+                .stream()
+                .map(r -> UpcomingReservationDto.builder()
+                        .reservationId(r.getReservationId())
+                        .licensePlate(r.getLicensePlate())
+                        .vehicleTypeName(r.getVehicleType() != null ? r.getVehicleType().getTypeName() : null)
+                        .expectedEntryTime(r.getExpectedEntryTime())
+                        .expectedExitTime(r.getExpectedExitTime())
+                        .status(r.getStatus())
+                        .depositStatus(r.getDepositStatus())
+                        .estimatedFeeAtBooking(r.getEstimatedFeeAtBooking())
+                        .build())
+                .toList();
+    }
+
     /**
      * Tao QR PayOS cho phi gui xe hien tai cua mot phien dang mo (dynamic theo thoi gian do).
      *
