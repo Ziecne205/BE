@@ -165,7 +165,7 @@ public class SessionService {
                 .entryTime(now)
                 .entryGate(entryGate)
                 .suggestedSlot(suggestedSlot)
-                .suggestedSlotHoldExpiresAt(suggestedSlot == null ? null : now.plusMinutes(5))
+                .suggestedSlotHoldExpiresAt(suggestedSlot == null ? null : now.plusSeconds(10))
                 .status("Admitted")
                 .build();
 
