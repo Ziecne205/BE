@@ -92,6 +92,15 @@ public class SimulationService {
 
     public SimulationDtos.ForceCheckinResult forceCheckin(String plate) {
         plate = LicensePlateNormalizer.normalize(plate);
+
+        // Force-checkin bo qua kiem tra suc chua (theo thiet ke), nhung VAN phai chan 1 bien so
+        // dung 2 phien dang mo cung luc — neu khong xe da o trong bai van co the duoc "cho vao"
+        // them lan nua (xem SessionService.checkIn ap dung cung 1 guard cho luong binh thuong).
+        if (sessionRepository.findFirstByLicensePlateInAndStatusIn(plate, OPEN_STATUSES).isPresent()) {
+            throw new BusinessRuleException(
+                    "Bien so " + plate + " da co phien gui xe dang mo", "DUPLICATE_OPEN_SESSION");
+        }
+
         VehicleType vt = vehicleTypeRepository.findById(defaultVehicleTypeId())
                 .orElseThrow(() -> new ResourceNotFoundException("Khong tim thay loai xe"));
         Gate gate = entryGate();

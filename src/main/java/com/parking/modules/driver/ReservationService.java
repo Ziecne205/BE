@@ -31,6 +31,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReservationService {
 
+    private static final List<String> OPEN_SESSION_STATUSES = List.of("Admitted", "Parked", "Moved");
+
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
     private final VehicleTypeRepository vehicleTypeRepository;
@@ -39,6 +41,7 @@ public class ReservationService {
     private final PricingPolicyRepository pricingPolicyRepository;
     private final FeeConfigService feeConfigService;
     private final PaymentRepository paymentRepository;
+    private final ParkingSessionRepository sessionRepository;
     private final PayosService payosService;
     private final PricingService pricingService;
     private final PlatformTransactionManager txManager;
@@ -83,6 +86,16 @@ public class ReservationService {
                 request.getLicensePlate(), List.of("Pending", "Confirmed", "CheckedIn"), request.getExpectedEntryTime(), request.getExpectedExitTime());
         if (!overlaps.isEmpty()) {
             throw new BusinessRuleException("Biển số này đã có đặt chỗ trong khung giờ bạn chọn", "LICENSE_PLATE_OVERLAP");
+        }
+
+        // Bien so co the da dang thuc su trong bai (xe vang lai duoc Staff/Manager check-in truc
+        // tiep tai cong, khong qua dat cho) — khong biet truoc khi nao xe do ra, nen chan dat cho
+        // moi cho bien so nay thay vi de 2 "chu the" (booking online va phien thuc te) trung nhau.
+        if (sessionRepository.findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
+                .isPresent()) {
+            throw new BusinessRuleException(
+                    "Bien so nay hien dang co mat trong bai, khong the dat cho moi",
+                    "LICENSE_PLATE_ALREADY_PARKED");
         }
 
         checkQuota(request, vehicleType);
