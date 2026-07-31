@@ -209,8 +209,9 @@ public class SessionService {
         // phien khac, neu khong 1 xe co the "dung" 2 phien cung luc (bug tuong tu duplicate
         // check-in binh thuong, nhung force-checkin truoc day khong co guard nay).
         if (!normalizedPlate.equals(previousPlate)) {
+            Long currentSessionId = session.getSessionId();
             sessionRepository.findFirstByLicensePlateInAndStatusIn(normalizedPlate, OPEN_SESSION_STATUSES)
-                    .filter(other -> !other.getSessionId().equals(session.getSessionId()))
+                    .filter(other -> !other.getSessionId().equals(currentSessionId))
                     .ifPresent(other -> {
                         throw new BusinessRuleException(
                                 "Bien so " + normalizedPlate + " da co phien gui xe khac dang mo",
