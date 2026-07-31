@@ -3,6 +3,7 @@ package com.parking.scheduler;
 import com.parking.common.exception.BusinessRuleException;
 import com.parking.entity.IncidentReport;
 import com.parking.entity.ParkingSession;
+import com.parking.entity.ParkingSlot;
 import com.parking.entity.Payment;
 import com.parking.entity.Reservation;
 import com.parking.entity.User;
@@ -11,6 +12,7 @@ import com.parking.modules.driver.ReservationService;
 import com.parking.modules.manager.FeeConfigService;
 import com.parking.repository.IncidentReportRepository;
 import com.parking.repository.ParkingSessionRepository;
+import com.parking.repository.ParkingSlotRepository;
 import com.parking.repository.PaymentRepository;
 import com.parking.repository.ReservationRepository;
 import com.parking.repository.UserRepository;
@@ -66,6 +68,7 @@ public class SessionExpiryScheduler {
     private static final String ISSUE_TYPE_OVERSTAY = "Overstay";
 
     private final ParkingSessionRepository sessionRepository;
+    private final ParkingSlotRepository slotRepository;
     private final ReservationRepository reservationRepository;
     private final IncidentReportRepository incidentReportRepository;
     private final UserRepository userRepository;
@@ -73,6 +76,37 @@ public class SessionExpiryScheduler {
     private final FeeConfigService feeConfigService;
     private final PaymentRepository paymentRepository;
     private final PayosService payosService;
+
+    /**
+     * Moi 1 phut: phien "Admitted" da qua moc giu o goi y (suggestedSlotHoldExpiresAt = gio vao +
+     * 5 phut, dat luc check-in) -> tu dong chuyen sang "Parked" va gan actualSlot = suggestedSlot.
+     * Demo/console khong co camera thuc de bao "xe da do vao o" (binh thuong viec nay do
+     * SimulationService.cameraSlotOccupied dam nhan), nen sau 5 phut he thong tu suy ra xe da do
+     * vao dung o goi y luc check-in — tranh phien bi "ket" mai o trang thai cho do.
+     * Neu o goi y khong con Available (vd da bi chiem boi xe khac trong luc cho) thi BO QUA, de
+     * Staff xu ly thu cong qua man Sua o thuc te; job flagStaleAdmittedSessions (15 phut) se bao
+     * Loiterer neu van khong ai xu ly.
+     */
+    @Scheduled(fixedDelay = 60 * 1000)
+    public void autoParkAdmittedSessions() {
+        LocalDateTime now = LocalDateTime.now();
+        List<ParkingSession> due = sessionRepository.findByStatusAndSuggestedSlotHoldExpiresAtBefore("Admitted", now);
+        for (ParkingSession session : due) {
+            ParkingSlot slot = session.getSuggestedSlot();
+            if (slot == null || !"Available".equals(slot.getStatus())) {
+                continue;
+            }
+            slot.setStatus("Occupied");
+            slotRepository.save(slot);
+
+            session.setActualSlot(slot);
+            session.setStatus("Parked");
+            sessionRepository.save(session);
+
+            log.info("Session {} auto-transitioned Admitted -> Parked at suggested slot {} after 5-min hold",
+                    session.getSessionId(), slot.getSlotCode());
+        }
+    }
 
     /**
      * Moi 5 phut: phien "Admitted" qua 15 phut ma chua duoc ghi o thuc te (Parked)
