@@ -12,7 +12,6 @@ import com.parking.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -70,9 +69,15 @@ public class SessionService {
      * Theo muc 2 cua nghiep vu: chi chan khach vang lai, xe co booking luon duoc
      * vao.
      */
-    // SERIALIZABLE: tinh headroom (capacity - inside - outstanding) va tao session phai nguyen tu,
-    // neu khong 2 walk-in dong thoi co the cung vuot suc chua (phantom read tren Sessions/Reservations).
-    @Transactional(isolation = Isolation.SERIALIZABLE)
+    // Truoc day dung @Transactional(isolation = SERIALIZABLE) de tinh headroom (capacity - inside
+    // - outstanding) va tao session nguyen tu, tranh 2 walk-in dong thoi cung vuot suc chua.
+    // BO isolation nay: MongoTransactionManager khong that su ho tro muc SERIALIZABLE kieu SQL, va
+    // no gay loi that khi ROLLBACK (vd bien so trung -> throw BusinessRuleException de huy giao
+    // dich) — Spring boc loi rollback thanh mot exception KHAC (khong con la BusinessRuleException),
+    // vuot qua moi catch va lo ra ngoai thanh 500 chung chung thay vi thong bao ro rang cho nguoi
+    // dung. MongoDB transaction mac dinh (snapshot isolation) van dam bao nguyen tu du khong dat
+    // ten "SERIALIZABLE"; du an bai 1 toa nha, luu luong thap nen danh doi nay chap nhan duoc.
+    @Transactional
     public CheckInResponse checkIn(CheckInRequest request) {
         request.setLicensePlate(LicensePlateNormalizer.normalize(request.getLicensePlate()));
         VehicleType vehicleType = vehicleTypeRepository.findById(request.getVehicleTypeId())
@@ -138,7 +143,8 @@ public class SessionService {
         if (sessionRepository.findFirstByLicensePlateInAndStatusIn(request.getLicensePlate(), OPEN_SESSION_STATUSES)
                 .isPresent()) {
             throw new BusinessRuleException(
-                    "Bien so " + request.getLicensePlate() + " da co phien gui xe dang mo", "DUPLICATE_OPEN_SESSION");
+                    "Xe bien so " + request.getLicensePlate() + " da co trong phien do xe, vui long kiem tra lai",
+                    "DUPLICATE_OPEN_SESSION");
         }
 
         ParkingSlot suggestedSlot = slotRepository
@@ -214,7 +220,7 @@ public class SessionService {
                     .filter(other -> !other.getSessionId().equals(currentSessionId))
                     .ifPresent(other -> {
                         throw new BusinessRuleException(
-                                "Bien so " + normalizedPlate + " da co phien gui xe khac dang mo",
+                                "Xe bien so " + normalizedPlate + " da co trong phien do xe khac, vui long kiem tra lai",
                                 "DUPLICATE_OPEN_SESSION");
                     });
         }
