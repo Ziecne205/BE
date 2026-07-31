@@ -204,6 +204,20 @@ public class SessionService {
 
         String normalizedPlate = LicensePlateNormalizer.normalize(request.getActualPlate());
         String previousPlate = session.getLicensePlateIn();
+
+        // Bien so sua lai (actualPlate) khac bien so cu -> phai kiem tra no chua dang mo o MOT
+        // phien khac, neu khong 1 xe co the "dung" 2 phien cung luc (bug tuong tu duplicate
+        // check-in binh thuong, nhung force-checkin truoc day khong co guard nay).
+        if (!normalizedPlate.equals(previousPlate)) {
+            sessionRepository.findFirstByLicensePlateInAndStatusIn(normalizedPlate, OPEN_SESSION_STATUSES)
+                    .filter(other -> !other.getSessionId().equals(session.getSessionId()))
+                    .ifPresent(other -> {
+                        throw new BusinessRuleException(
+                                "Bien so " + normalizedPlate + " da co phien gui xe khac dang mo",
+                                "DUPLICATE_OPEN_SESSION");
+                    });
+        }
+
         session.setLicensePlateIn(normalizedPlate);
         session.setIsForceCheckIn(true);
 
